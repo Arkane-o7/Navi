@@ -1,0 +1,57 @@
+module.exports = {
+  packagerConfig: {
+    name: 'Navi',
+    executableName: 'navi',
+    asar: true,
+    icon: './assets/icon',
+    appBundleId: 'com.navi.app',
+    appCategoryType: 'public.app-category.productivity',
+    darwinDarkModeSupport: true,
+  },
+  rebuildConfig: {},
+  makers: [
+    {
+      name: '@electron-forge/maker-squirrel',
+      config: {
+        name: 'Navi',
+        iconUrl: 'https://raw.githubusercontent.com/your-repo/assets/icon.ico',
+      },
+    },
+    {
+      name: '@electron-forge/maker-zip',
+      platforms: ['darwin', 'linux'],
+    },
+    {
+      name: '@electron-forge/maker-dmg',
+      config: {
+        name: 'Navi',
+        icon: './assets/icon.icns',
+      },
+    },
+  ],
+  plugins: [
+    {
+      name: '@electron-forge/plugin-vite',
+      config: {
+        build: [
+          {
+            entry: 'src/main/index.ts',
+            config: 'vite.main.config.ts',
+            target: 'main',
+          },
+          {
+            entry: 'src/preload/index.ts',
+            config: 'vite.preload.config.ts',
+            target: 'preload',
+          },
+        ],
+        renderer: [
+          {
+            name: 'main_window',
+            config: 'vite.renderer.config.ts',
+          },
+        ],
+      },
+    },
+  ],
+};

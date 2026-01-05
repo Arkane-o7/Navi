@@ -1,9 +1,16 @@
 /// <reference types="vite/client" />
 
-interface ImportMetaEnv {
-  readonly VITE_API_URL: string;
+declare global {
+  interface Window {
+    navi: {
+      hide: () => void;
+      resize: (height: number) => void;
+      openExternal: (url: string) => void;
+      getTheme: () => Promise<boolean>;
+      onShow: (fn: () => void) => () => void;
+      onHide: (fn: () => void) => () => void;
+    };
+  }
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
+export {};

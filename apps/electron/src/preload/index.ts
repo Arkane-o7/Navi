@@ -1,20 +1,27 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 const api = {
-  hide: () => ipcRenderer.send('spotlight:hide'),
-  resize: (height: number) => ipcRenderer.send('spotlight:resize', height),
-  openExternal: (url: string) => ipcRenderer.send('shell:open', url),
-  
-  onShow: (fn: () => void) => {
-    const handler = () => fn();
-    ipcRenderer.on('spotlight:show', handler);
-    return () => ipcRenderer.removeListener('spotlight:show', handler);
+  // Window controls
+  hide: () => ipcRenderer.send('flow:hide'),
+  resize: (height: number) => ipcRenderer.send('flow:resize', height),
+
+  // Shell
+  openExternal: (url: string) => ipcRenderer.send('shell:openExternal', url),
+
+  // Theme
+  getTheme: (): Promise<boolean> => ipcRenderer.invoke('theme:get'),
+
+  // Events
+  onShow: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('flow:show', handler);
+    return () => ipcRenderer.removeListener('flow:show', handler);
   },
-  
-  onHide: (fn: () => void) => {
-    const handler = () => fn();
-    ipcRenderer.on('spotlight:hide', handler);
-    return () => ipcRenderer.removeListener('spotlight:hide', handler);
+
+  onHide: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('flow:hide', handler);
+    return () => ipcRenderer.removeListener('flow:hide', handler);
   },
 };
 

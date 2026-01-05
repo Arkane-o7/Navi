@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useChatStore, Message } from './stores/chatStore';
+import { streamChat } from './hooks/useChat';
+import { Markdown } from './components/Markdown';
 
-const API_URL = 'https://navi-chat-api.vercel.app';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-}
+// ─────────────────────────────────────────────────────────────
+// Height Constants (Cerebro-style calculation)
+// ─────────────────────────────────────────────────────────────
+const INPUT_HEIGHT = 54;
+const MESSAGE_HEIGHT = 72; // Approximate height per message
+const FOOTER_HEIGHT = 40;
+const MAX_VISIBLE_MESSAGES = 5;
+const BORDER_HEIGHT = 2; // 1px top + 1px bottom
 
 declare global {
   interface Window {
@@ -14,6 +18,7 @@ declare global {
       hide: () => void;
       resize: (height: number) => void;
       openExternal: (url: string) => void;
+      getTheme: () => Promise<boolean>;
       onShow: (fn: () => void) => () => void;
       onHide: (fn: () => void) => () => void;
     };
@@ -21,57 +26,79 @@ declare global {
 }
 
 export default function App() {
-  const [query, setQuery] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [streamingContent, setStreamingContent] = useState('');
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // --- Resizing Logic ---
-  const updateHeight = useCallback(() => {
-    if (!containerRef.current || !window.navi) return;
-    const height = containerRef.current.offsetHeight;
-    window.navi.resize(height);
+  const {
+    getActiveConversation,
+    createConversation,
+    addMessage,
+    updateMessage,
+    setActiveConversation,
+    clearConversation,
+  } = useChatStore();
+
+  const conversation = getActiveConversation();
+  const messages = conversation?.messages ?? [];
+
+  // ─────────────────────────────────────────────────────────────
+  // Window Resize (Cerebro-style calculation)
+  // ─────────────────────────────────────────────────────────────
+  const calculateHeight = useCallback((messageCount: number): number => {
+    if (messageCount === 0) {
+      return INPUT_HEIGHT + BORDER_HEIGHT;
+    }
+    
+    // Calculate messages height (capped at max visible)
+    const visibleMessages = Math.min(messageCount, MAX_VISIBLE_MESSAGES);
+    const messagesHeight = visibleMessages * MESSAGE_HEIGHT;
+    
+    return INPUT_HEIGHT + messagesHeight + FOOTER_HEIGHT + BORDER_HEIGHT;
   }, []);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver(() => {
-      updateHeight();
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, [updateHeight]);
+  const updateHeight = useCallback(() => {
+    if (!window.navi) return;
+    const height = calculateHeight(messages.length);
+    console.log(`[Renderer] Resizing to ${height}px for ${messages.length} messages`);
+    window.navi.resize(height);
+  }, [messages.length, calculateHeight]);
 
-  // Also force update on message changes
+  // Update height when message count changes
   useEffect(() => {
+    console.log(`[Renderer] Messages changed: ${messages.length}`);
     updateHeight();
-    // Double check after render
-    requestAnimationFrame(updateHeight);
-  }, [messages, updateHeight]);
+  }, [messages.length, updateHeight]);
 
-  // --- Scroll Logic ---
+  // ─────────────────────────────────────────────────────────────
+  // Auto-scroll
+  // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamingContent]);
 
-  // --- Event Listeners ---
+  // ─────────────────────────────────────────────────────────────
+  // Window Events
+  // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!window.navi) return;
-    
+
     const unsubShow = window.navi.onShow(() => {
       inputRef.current?.focus();
-      inputRef.current?.select();
       updateHeight();
     });
 
-    return () => {
-      unsubShow();
-    };
+    return unsubShow;
   }, [updateHeight]);
 
+  // ─────────────────────────────────────────────────────────────
+  // Keyboard Shortcuts
+  // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -79,106 +106,126 @@ export default function App() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setMessages([]);
-        setQuery('');
+        if (conversation) {
+          clearConversation(conversation.id);
+        }
+        setInput('');
+        setStreamingContent('');
+        setStreamingMessageId(null);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        createConversation();
+        setInput('');
+        setStreamingContent('');
+        setStreamingMessageId(null);
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [conversation, clearConversation, createConversation]);
 
-  // --- Chat Logic ---
+  // ─────────────────────────────────────────────────────────────
+  // Submit Handler
+  // ─────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || isLoading) return;
+    console.log('[Submit] Input:', input);
+    if (!input.trim() || isLoading) return;
 
-    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: query.trim() };
-    setMessages(prev => [...prev, userMsg]);
-    setQuery('');
+    // Create conversation if none exists
+    let convId = conversation?.id;
+    if (!convId) {
+      convId = createConversation();
+      console.log('[Submit] Created conversation:', convId);
+    }
+
+    // Add user message
+    console.log('[Submit] Adding user message');
+    addMessage(convId, { role: 'user', content: input.trim() });
+    const userInput = input.trim();
+    setInput('');
     setIsLoading(true);
 
-    const assistantId = crypto.randomUUID();
-    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
+    // Create placeholder for assistant message
+    const assistantId = addMessage(convId, { role: 'assistant', content: '' });
+    setStreamingMessageId(assistantId);
+    setStreamingContent('');
 
-    try {
-      const res = await fetch(`${API_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg.content }),
-      });
+    // Stream response
+    let fullContent = '';
 
-      if (!res.ok) throw new Error('API Error');
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.content) {
-                  fullContent += parsed.content;
-                  setMessages(prev => 
-                    prev.map(m => m.id === assistantId ? { ...m, content: fullContent } : m)
-                  );
-                }
-              } catch {}
-            }
-          }
-        }
-      }
-    } catch (err) {
-      setMessages(prev => 
-        prev.map(m => m.id === assistantId ? { ...m, content: 'Error: Could not connect to Navi.' } : m)
-      );
-    } finally {
-      setIsLoading(false);
-      // Focus back on input
-      inputRef.current?.focus();
-    }
+    await streamChat({
+      message: userInput,
+      onChunk: (chunk) => {
+        fullContent += chunk;
+        setStreamingContent(fullContent);
+      },
+      onDone: () => {
+        updateMessage(convId!, assistantId, fullContent);
+        setStreamingContent('');
+        setStreamingMessageId(null);
+        setIsLoading(false);
+        inputRef.current?.focus();
+      },
+      onError: (error) => {
+        updateMessage(convId!, assistantId, `Error: ${error.message}`);
+        setStreamingContent('');
+        setStreamingMessageId(null);
+        setIsLoading(false);
+        inputRef.current?.focus();
+      },
+    });
   };
 
-  const hasMessages = messages.length > 0;
+  // ─────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────
+  const hasContent = messages.length > 0;
+
+  const getMessageContent = (msg: Message): string => {
+    if (msg.id === streamingMessageId) {
+      return streamingContent;
+    }
+    return msg.content;
+  };
 
   return (
-    <div className="app-container" ref={containerRef}>
-      <div className={`search-section ${hasMessages ? 'has-content' : ''}`}>
-        <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <div className="flow-container" ref={containerRef}>
+      {/* Input Bar */}
+      <div className={`input-bar ${hasContent ? 'has-content' : ''}`}>
+        <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
-          <path d="M21 21L16.65 16.65" />
+          <path d="m21 21-4.35-4.35" />
         </svg>
-        <form onSubmit={handleSubmit} style={{ flex: 1 }}>
+
+        <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex' }}>
           <input
             ref={inputRef}
-            className="search-input"
-            placeholder="Ask Navi..."
-            value={query}
-            onChange={e => setQuery(e.target.value)}
+            className="input-field"
+            type="text"
+            placeholder="Ask Navi anything..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             autoFocus
           />
         </form>
+
+        {isLoading && <div className="input-loading" />}
       </div>
 
-      {hasMessages && (
-        <div className="messages-container">
-          {messages.map(msg => (
-            <div key={msg.id} className="message-item">
-              <div className={`role-icon ${msg.role}`}>
+      {/* Messages */}
+      {hasContent && (
+        <div className="messages">
+          {messages.map((msg) => (
+            <div key={msg.id} className="message">
+              <div className={`message-avatar ${msg.role}`}>
                 {msg.role === 'user' ? 'U' : 'N'}
               </div>
               <div className="message-content">
-                {msg.content || (isLoading && msg.role === 'assistant' ? 'Thinking...' : '')}
+                <Markdown content={getMessageContent(msg)} />
+                {msg.id === streamingMessageId && <span className="typing-cursor" />}
               </div>
             </div>
           ))}
@@ -186,12 +233,18 @@ export default function App() {
         </div>
       )}
 
-      {hasMessages && (
+      {/* Footer */}
+      {hasContent && (
         <div className="footer">
-          <div className="shortcut">
-            <span className="key">⌘</span>
-            <span className="key">K</span>
-            <span>Clear</span>
+          <div className="shortcuts">
+            <div className="shortcut">
+              <span className="key">⌘K</span>
+              <span>Clear</span>
+            </div>
+            <div className="shortcut">
+              <span className="key">⌘N</span>
+              <span>New</span>
+            </div>
           </div>
           <div className="shortcut">
             <span className="key">esc</span>

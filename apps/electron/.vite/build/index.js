@@ -1,21 +1,19 @@
 "use strict";
 const electron = require("electron");
 const path = require("path");
-if (require("electron-squirrel-startup")) {
-  electron.app.quit();
-}
-let spotlightWindow = null;
-const WINDOW_WIDTH = 680;
-const MIN_HEIGHT = 60;
-const MAX_HEIGHT = 520;
-function createSpotlightWindow() {
-  const primaryDisplay = electron.screen.getPrimaryDisplay();
-  const { width: screenWidth } = primaryDisplay.workAreaSize;
+if (require("electron-squirrel-startup")) electron.app.quit();
+const WINDOW_WIDTH = 640;
+const MIN_HEIGHT = 54;
+const MAX_HEIGHT = 480;
+const SHORTCUT = process.platform === "darwin" ? "Command+`" : "Alt+Space";
+let flowWindow = null;
+function createFlowWindow() {
+  const { width: screenWidth } = electron.screen.getPrimaryDisplay().workAreaSize;
   const win = new electron.BrowserWindow({
     width: WINDOW_WIDTH,
     height: MIN_HEIGHT,
     x: Math.round((screenWidth - WINDOW_WIDTH) / 2),
-    y: 140,
+    y: 120,
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",
@@ -25,88 +23,65 @@ function createSpotlightWindow() {
     resizable: false,
     movable: true,
     show: false,
-    roundedCorners: true,
     vibrancy: "popover",
     visualEffectState: "active",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
   });
   {
-    win.loadURL("http://localhost:5173");
+    win.loadURL("http://localhost:5175");
+    win.webContents.openDevTools({ mode: "detach" });
   }
-  win.on("blur", () => {
-    hideSpotlight();
-  });
-  win.once("ready-to-show", () => {
-    console.log("Window ready");
-  });
+  win.on("blur", hideFlow);
   return win;
 }
-function showSpotlight() {
-  if (!spotlightWindow) return;
+function showFlow() {
+  if (!flowWindow) return;
   const cursor = electron.screen.getCursorScreenPoint();
   const display = electron.screen.getDisplayNearestPoint(cursor);
-  const { x: displayX, width: displayWidth } = display.workArea;
-  spotlightWindow.setPosition(
-    Math.round(displayX + (displayWidth - WINDOW_WIDTH) / 2),
-    140
-  );
-  spotlightWindow.setSize(WINDOW_WIDTH, MIN_HEIGHT, false);
-  spotlightWindow.show();
-  spotlightWindow.focus();
-  spotlightWindow.webContents.send("spotlight:show");
+  const x = Math.round(display.workArea.x + (display.workArea.width - WINDOW_WIDTH) / 2);
+  flowWindow.setPosition(x, 120);
+  flowWindow.setSize(WINDOW_WIDTH, MIN_HEIGHT, false);
+  flowWindow.show();
+  flowWindow.focus();
+  flowWindow.webContents.send("flow:show");
 }
-function hideSpotlight() {
-  if (!spotlightWindow || !spotlightWindow.isVisible()) return;
-  spotlightWindow.hide();
-  spotlightWindow.webContents.send("spotlight:hide");
+function hideFlow() {
+  if (!(flowWindow == null ? void 0 : flowWindow.isVisible())) return;
+  flowWindow.hide();
+  flowWindow.webContents.send("flow:hide");
 }
-function toggleSpotlight() {
-  if (!spotlightWindow) {
-    spotlightWindow = createSpotlightWindow();
-    spotlightWindow.once("ready-to-show", showSpotlight);
+function toggleFlow() {
+  if (!flowWindow) {
+    flowWindow = createFlowWindow();
+    flowWindow.once("ready-to-show", showFlow);
     return;
   }
-  if (spotlightWindow.isVisible()) {
-    hideSpotlight();
-  } else {
-    showSpotlight();
-  }
+  flowWindow.isVisible() ? hideFlow() : showFlow();
 }
-electron.ipcMain.on("spotlight:hide", () => hideSpotlight());
-electron.ipcMain.on("spotlight:resize", (_event, contentHeight) => {
-  if (!spotlightWindow) {
-    console.log("No window to resize");
-    return;
-  }
-  const newHeight = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, Math.ceil(contentHeight)));
-  console.log("Resize requested:", contentHeight, "-> clamped:", newHeight);
-  const [, currentHeight] = spotlightWindow.getSize();
-  if (currentHeight !== newHeight) {
-    console.log("Applying resize from", currentHeight, "to", newHeight);
-    spotlightWindow.setSize(WINDOW_WIDTH, newHeight, false);
+electron.ipcMain.on("flow:hide", hideFlow);
+electron.ipcMain.on("flow:resize", (_e, height) => {
+  if (!flowWindow) return;
+  const clamped = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, Math.ceil(height)));
+  const [currentWidth, currentHeight] = flowWindow.getSize();
+  if (currentHeight !== clamped) {
+    console.log(`[Resize] ${currentHeight} -> ${clamped}`);
+    flowWindow.setSize(currentWidth, clamped, false);
   }
 });
-electron.ipcMain.on("shell:open", (_event, url) => {
+electron.ipcMain.on("shell:openExternal", (_e, url) => {
   electron.shell.openExternal(url);
 });
+electron.ipcMain.handle("theme:get", () => electron.nativeTheme.shouldUseDarkColors);
 electron.app.whenReady().then(() => {
-  const shortcut = process.platform === "darwin" ? "Command+`" : "Alt+Space";
-  if (electron.globalShortcut.register(shortcut, toggleSpotlight)) {
-    console.log("Shortcut registered:", shortcut);
-  } else {
-    console.error("Failed to register shortcut");
-  }
-  spotlightWindow = createSpotlightWindow();
+  electron.globalShortcut.register(SHORTCUT, toggleFlow);
+  flowWindow = createFlowWindow();
 });
-electron.app.on("will-quit", () => {
-  electron.globalShortcut.unregisterAll();
-});
+electron.app.on("will-quit", () => electron.globalShortcut.unregisterAll());
 electron.app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    electron.app.quit();
-  }
+  if (process.platform !== "darwin") electron.app.quit();
 });

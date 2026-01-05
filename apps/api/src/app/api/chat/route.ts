@@ -4,6 +4,18 @@ import { createChatCompletion, streamChatCompletion, type ChatCompletionMessage 
 import { sql } from '@/lib/db';
 import { checkRateLimit } from '@/lib/redis';
 
+// CORS headers for Electron app
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+// Handle CORS preflight
+export async function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
+}
+
 const chatRequestSchema = z.object({
   message: z.string().min(1).max(10000),
   conversationId: z.string().optional(),
@@ -84,6 +96,7 @@ export async function POST(request: NextRequest) {
 
         return new Response(readable, {
           headers: {
+            ...corsHeaders,
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             Connection: 'keep-alive',

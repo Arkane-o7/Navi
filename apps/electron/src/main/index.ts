@@ -163,13 +163,19 @@ ipcMain.handle('search:query', async (_e, query: string): Promise<SearchResult[]
 
   // Add common app shortcuts (can be extended with actual app detection)
   const commonApps = [
-    { name: 'Calculator', command: 'calc', icon: '🔢' },
-    { name: 'Notepad', command: 'notepad', icon: '📝' },
-    { name: 'Terminal', command: process.platform === 'win32' ? 'cmd' : 'terminal', icon: '💻' },
+    { name: 'Calculator', command: process.platform === 'win32' ? 'calc' : 'calculator', icon: '🔢', keywords: ['calc', 'calculator', 'math'] },
+    { name: 'Notepad', command: process.platform === 'win32' ? 'notepad' : 'TextEdit', icon: '📝', keywords: ['notepad', 'text', 'editor', 'note'] },
+    { name: 'Terminal', command: process.platform === 'win32' ? 'cmd' : 'terminal', icon: '💻', keywords: ['terminal', 'cmd', 'command', 'shell', 'bash'] },
+    { name: 'File Manager', command: process.platform === 'win32' ? 'explorer' : 'finder', icon: '📁', keywords: ['files', 'explorer', 'finder', 'folder'] },
+    { name: 'Settings', command: process.platform === 'win32' ? 'ms-settings:' : 'System Preferences', icon: '⚙️', keywords: ['settings', 'preferences', 'config'] },
   ];
 
+  // Check for app matches
   commonApps.forEach(app => {
-    if (app.name.toLowerCase().includes(lowerQuery)) {
+    const nameMatch = app.name.toLowerCase().includes(lowerQuery);
+    const keywordMatch = app.keywords.some(keyword => keyword.includes(lowerQuery));
+    
+    if (nameMatch || keywordMatch) {
       results.push({
         id: `app-${app.command}`,
         type: 'app',
@@ -177,6 +183,37 @@ ipcMain.handle('search:query', async (_e, query: string): Promise<SearchResult[]
         subtitle: 'Launch application',
         icon: app.icon,
         action: `launch:${app.command}`,
+      });
+    }
+  });
+
+  // Add quick actions
+  const quickActions = [
+    { 
+      keywords: ['time', 'clock', 'date'], 
+      title: 'Current Time',
+      subtitle: new Date().toLocaleString(),
+      icon: '🕐',
+      action: 'show-time'
+    },
+    {
+      keywords: ['calc', 'calculate', 'math'],
+      title: 'Quick Calculator',
+      subtitle: 'Try: 2+2, 10*5, etc.',
+      icon: '🧮',
+      action: 'calculator'
+    },
+  ];
+
+  quickActions.forEach(action => {
+    if (action.keywords.some(keyword => lowerQuery.includes(keyword))) {
+      results.push({
+        id: `action-${action.action}`,
+        type: 'action',
+        title: action.title,
+        subtitle: action.subtitle,
+        icon: action.icon,
+        action: action.action,
       });
     }
   });
@@ -190,6 +227,15 @@ ipcMain.handle('search:execute', async (_e, action: string) => {
     if (action === 'open-chat') {
       // Signal renderer to switch to chat mode
       return { success: true, type: 'chat' };
+    } else if (action === 'show-time') {
+      // Quick action: show current time in notification or return data
+      return { success: true, type: 'info', message: new Date().toLocaleString() };
+    } else if (action === 'calculator') {
+      // Open calculator app
+      const calcCommand = process.platform === 'win32' ? 'calc' : 'calculator';
+      const { exec } = require('child_process');
+      exec(calcCommand);
+      return { success: true, type: 'launch' };
     } else if (action.startsWith('launch:')) {
       const command = action.replace('launch:', '');
       const { exec } = require('child_process');

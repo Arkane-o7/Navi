@@ -228,20 +228,45 @@ ipcMain.handle('search:execute', async (_e, action: string) => {
       // Signal renderer to switch to chat mode
       return { success: true, type: 'chat' };
     } else if (action === 'show-time') {
-      // Quick action: show current time in notification or return data
+      // Quick action: show current time
       return { success: true, type: 'info', message: new Date().toLocaleString() };
     } else if (action === 'calculator') {
       // Open calculator app
       const calcCommand = process.platform === 'win32' ? 'calc' : 'calculator';
       const { exec } = require('child_process');
-      exec(calcCommand);
+      exec(calcCommand, (error: Error | null) => {
+        if (error) {
+          console.error('Failed to launch calculator:', error);
+        }
+      });
       return { success: true, type: 'launch' };
     } else if (action.startsWith('launch:')) {
-      const command = action.replace('launch:', '');
+      // Whitelist of allowed commands for security
+      const allowedCommands: Record<string, string> = {
+        'calc': process.platform === 'win32' ? 'calc' : 'calculator',
+        'calculator': process.platform === 'win32' ? 'calc' : 'calculator',
+        'notepad': process.platform === 'win32' ? 'notepad' : 'TextEdit',
+        'TextEdit': process.platform === 'darwin' ? 'open -a TextEdit' : 'notepad',
+        'cmd': process.platform === 'win32' ? 'cmd' : 'terminal',
+        'terminal': process.platform === 'darwin' ? 'open -a Terminal' : 'gnome-terminal',
+        'explorer': process.platform === 'win32' ? 'explorer' : 'open .',
+        'finder': process.platform === 'darwin' ? 'open .' : 'explorer',
+        'ms-settings:': process.platform === 'win32' ? 'start ms-settings:' : 'open "x-apple.systempreferences:"',
+        'System Preferences': process.platform === 'darwin' ? 'open "x-apple.systempreferences:"' : 'start ms-settings:',
+      };
+
+      const requestedCommand = action.replace('launch:', '');
+      const safeCommand = allowedCommands[requestedCommand];
+
+      if (!safeCommand) {
+        console.warn(`Attempted to launch non-whitelisted command: ${requestedCommand}`);
+        return { success: false, error: 'Command not allowed' };
+      }
+
       const { exec } = require('child_process');
-      exec(command, (error: Error | null) => {
+      exec(safeCommand, (error: Error | null) => {
         if (error) {
-          console.error('Launch error:', error);
+          console.error(`Failed to launch ${requestedCommand}:`, error);
         }
       });
       return { success: true, type: 'launch' };

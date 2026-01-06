@@ -325,7 +325,11 @@ export default function App() {
               className={`search-result ${index === selectedIndex ? 'selected' : ''}`}
               onClick={() => {
                 setSelectedIndex(index);
-                handleSubmit(new Event('submit') as any);
+                // Create a proper form submit event
+                const form = containerRef.current?.querySelector('form');
+                if (form) {
+                  form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                }
               }}
             >
               <div className="result-icon">{result.icon}</div>

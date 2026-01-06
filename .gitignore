@@ -7,6 +7,7 @@ dist/
 out/
 .next/
 .turbo/
+.vite/
 
 # Environment files
 .env
@@ -30,6 +31,7 @@ pnpm-debug.log*
 
 # Electron
 apps/electron/out/
+apps/electron/.vite/
 
 # Vercel
 .vercel/

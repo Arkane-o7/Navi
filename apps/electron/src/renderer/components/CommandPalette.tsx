@@ -55,30 +55,78 @@ const defaultCommands: SearchResultItem[] = [
   },
 ];
 
-// Quick calculations using simple math
+// Safe math expression evaluator using recursive descent parsing
 function evaluateMath(expr: string): string | null {
   try {
-    // Only allow numbers, operators, parentheses, and spaces
     const sanitized = expr.replace(/\s/g, '');
     if (!/^[0-9+\-*/.()]+$/.test(sanitized)) return null;
     if (sanitized.length === 0) return null;
     
-    // Use Function constructor instead of eval for slightly better safety
-    // eslint-disable-next-line no-new-func
-    const result = new Function(`return ${sanitized}`)();
+    let pos = 0;
     
-    if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
-      // Format the result nicely
-      if (Number.isInteger(result)) {
-        return result.toLocaleString();
+    const parseNumber = (): number => {
+      let numStr = '';
+      while (pos < sanitized.length && /[0-9.]/.test(sanitized[pos])) {
+        numStr += sanitized[pos++];
       }
-      return result.toLocaleString(undefined, { maximumFractionDigits: 6 });
+      return parseFloat(numStr);
+    };
+    
+    const parseFactor = (): number => {
+      if (sanitized[pos] === '(') {
+        pos++; // skip '('
+        const result = parseExpression();
+        pos++; // skip ')'
+        return result;
+      }
+      if (sanitized[pos] === '-') {
+        pos++;
+        return -parseFactor();
+      }
+      return parseNumber();
+    };
+    
+    const parseTerm = (): number => {
+      let result = parseFactor();
+      while (pos < sanitized.length && (sanitized[pos] === '*' || sanitized[pos] === '/')) {
+        const op = sanitized[pos++];
+        const right = parseFactor();
+        result = op === '*' ? result * right : result / right;
+      }
+      return result;
+    };
+    
+    const parseExpression = (): number => {
+      let result = parseTerm();
+      while (pos < sanitized.length && (sanitized[pos] === '+' || sanitized[pos] === '-')) {
+        const op = sanitized[pos++];
+        const right = parseTerm();
+        result = op === '+' ? result + right : result - right;
+      }
+      return result;
+    };
+    
+    const result = parseExpression();
+    
+    if (pos !== sanitized.length || !isFinite(result) || isNaN(result)) {
+      return null;
     }
-    return null;
+    
+    if (Number.isInteger(result)) {
+      return result.toLocaleString();
+    }
+    return result.toLocaleString(undefined, { maximumFractionDigits: 6 });
   } catch {
     return null;
   }
 }
+
+// Chat trigger words for detecting conversational queries
+const CHAT_TRIGGERS = [
+  'ask', 'what', 'how', 'why', 'when', 'where', 'who', 
+  'can', 'could', 'would', 'should', 'is', 'are', 'do', 
+  'does', 'tell', 'explain'
+] as const;
 
 interface CommandPaletteProps {
   onClose: () => void;
@@ -130,7 +178,6 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
     }
     
     // Check if user wants to chat (starts with common chat triggers)
-    const chatTriggers = ['ask', 'what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'would', 'should', 'is', 'are', 'do', 'does', 'tell', 'explain'];
     const firstWord = lowerQuery.split(' ')[0];
     
     // Filter commands that match
@@ -156,7 +203,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
       }
       
       // Chat suggestion for conversational queries
-      if (chatTriggers.includes(firstWord) || query.length > 15) {
+      if (CHAT_TRIGGERS.includes(firstWord as typeof CHAT_TRIGGERS[number]) || query.length > 15) {
         results.unshift({
           id: 'chat-query',
           name: `Ask Navi: "${query.slice(0, 40)}${query.length > 40 ? '...' : ''}"`,

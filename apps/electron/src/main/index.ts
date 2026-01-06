@@ -85,18 +85,17 @@ function createTrayIcon(): Electron.NativeImage {
   const size = process.platform === 'darwin' ? 16 : 22;
   const canvas = Buffer.alloc(size * size * 4); // RGBA
 
-  // Fill with Navi's accent color (indigo/purple gradient approximation)
+  // Fill with Navi's accent color (indigo/purple)
   const accentR = 99, accentG = 102, accentB = 241; // #6366f1
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
       
-      // Create a rounded square with "N" letter shape
+      // Create a square with "N" letter shape
       const margin = Math.floor(size * 0.1);
-      const radius = Math.floor(size * 0.2);
       
-      // Check if pixel is within rounded rect bounds
+      // Check if pixel is within bounds
       const inBounds = x >= margin && x < size - margin && 
                        y >= margin && y < size - margin;
       
@@ -162,7 +161,7 @@ function createTray(): void {
     tray.setContextMenu(contextMenu);
     tray.on('click', () => toggleFlow());
   } catch (error) {
-    console.log('Tray creation skipped (no icon available)');
+    console.error('Tray creation failed:', error);
   }
 }
 

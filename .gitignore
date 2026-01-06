@@ -7,6 +7,7 @@ dist/
 out/
 .next/
 .turbo/
+.vite/
 
 # Environment files
 .env

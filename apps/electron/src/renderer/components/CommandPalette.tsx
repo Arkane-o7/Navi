@@ -4,6 +4,11 @@ import { Markdown } from './Markdown';
 import { useChatStore, Message } from '../stores/chatStore';
 import { streamChat } from '../hooks/useChat';
 
+// Helper to open external links
+const openExternal = (url: string) => {
+  window.navi?.openExternal(url);
+};
+
 // Default commands available in the palette
 const defaultCommands: SearchResultItem[] = [
   {
@@ -27,7 +32,53 @@ const defaultCommands: SearchResultItem[] = [
     icon: { type: 'emoji', value: '➕' },
     type: 'command',
   },
+  {
+    id: 'google',
+    name: 'Search Google',
+    description: 'Search the web with Google',
+    icon: { type: 'emoji', value: '🔍' },
+    type: 'link',
+  },
+  {
+    id: 'github',
+    name: 'Search GitHub',
+    description: 'Search repositories on GitHub',
+    icon: { type: 'emoji', value: '🐙' },
+    type: 'link',
+  },
+  {
+    id: 'youtube',
+    name: 'Search YouTube',
+    description: 'Search videos on YouTube',
+    icon: { type: 'emoji', value: '▶️' },
+    type: 'link',
+  },
 ];
+
+// Quick calculations using simple math
+function evaluateMath(expr: string): string | null {
+  try {
+    // Only allow numbers, operators, parentheses, and spaces
+    const sanitized = expr.replace(/\s/g, '');
+    if (!/^[0-9+\-*/.()]+$/.test(sanitized)) return null;
+    if (sanitized.length === 0) return null;
+    
+    // Use Function constructor instead of eval for slightly better safety
+    // eslint-disable-next-line no-new-func
+    const result = new Function(`return ${sanitized}`)();
+    
+    if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+      // Format the result nicely
+      if (Number.isInteger(result)) {
+        return result.toLocaleString();
+      }
+      return result.toLocaleString(undefined, { maximumFractionDigits: 6 });
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 interface CommandPaletteProps {
   onClose: () => void;
@@ -60,52 +111,74 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
     if (mode === 'chat') return [];
     
     if (!query.trim()) {
-      return defaultCommands;
+      return defaultCommands.slice(0, 5); // Show first 5 commands by default
     }
 
     const lowerQuery = query.toLowerCase();
+    const results: SearchResultItem[] = [];
+    
+    // Check for math expression
+    const mathResult = evaluateMath(query);
+    if (mathResult !== null) {
+      results.push({
+        id: 'math-result',
+        name: `= ${mathResult}`,
+        description: `Result of: ${query}`,
+        icon: { type: 'emoji', value: '🔢' },
+        type: 'command',
+      });
+    }
     
     // Check if user wants to chat (starts with common chat triggers)
-    const chatTriggers = ['ask', 'what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'would', 'should', 'is', 'are', 'do', 'does'];
+    const chatTriggers = ['ask', 'what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'would', 'should', 'is', 'are', 'do', 'does', 'tell', 'explain'];
     const firstWord = lowerQuery.split(' ')[0];
     
-    if (chatTriggers.includes(firstWord) || query.length > 20) {
-      // Likely a chat query
-      return [
-        {
-          id: 'chat-query',
-          name: `Ask Navi: "${query}"`,
-          description: 'Get an AI-powered answer',
-          icon: { type: 'emoji', value: '✨' },
-          type: 'chat',
-        },
-        ...defaultCommands.filter(cmd => 
-          cmd.name.toLowerCase().includes(lowerQuery) ||
-          cmd.description?.toLowerCase().includes(lowerQuery)
-        ),
-      ];
-    }
-
     // Filter commands that match
-    const filtered = defaultCommands.filter(cmd => 
+    const matchingCommands = defaultCommands.filter(cmd => 
       cmd.name.toLowerCase().includes(lowerQuery) ||
       cmd.description?.toLowerCase().includes(lowerQuery)
     );
-
-    // If query doesn't match any commands, suggest chat
-    if (filtered.length === 0 && query.length > 2) {
-      return [
-        {
+    
+    results.push(...matchingCommands);
+    
+    // Add web search options for queries
+    if (query.length > 2) {
+      // Add quick web search options
+      if (!matchingCommands.some(c => c.id === 'google')) {
+        results.push({
+          id: 'google-search',
+          name: `Search Google: "${query}"`,
+          description: 'Open Google search results',
+          icon: { type: 'emoji', value: '🔍' },
+          type: 'link',
+          action: () => openExternal(`https://www.google.com/search?q=${encodeURIComponent(query)}`),
+        });
+      }
+      
+      // Chat suggestion for conversational queries
+      if (chatTriggers.includes(firstWord) || query.length > 15) {
+        results.unshift({
           id: 'chat-query',
-          name: `Ask Navi: "${query}"`,
+          name: `Ask Navi: "${query.slice(0, 40)}${query.length > 40 ? '...' : ''}"`,
           description: 'Get an AI-powered answer',
           icon: { type: 'emoji', value: '✨' },
           type: 'chat',
-        },
-      ];
+        });
+      }
     }
 
-    return filtered;
+    // If no results and query is substantial, suggest chat
+    if (results.length === 0 && query.length > 2) {
+      results.push({
+        id: 'chat-query',
+        name: `Ask Navi: "${query}"`,
+        description: 'Get an AI-powered answer',
+        icon: { type: 'emoji', value: '✨' },
+        type: 'chat',
+      });
+    }
+
+    return results.slice(0, 6); // Limit to 6 results
   }, [query, mode]);
 
   const results = searchResults();
@@ -147,8 +220,36 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
         createConversation();
         setQuery('');
         break;
+      case 'math-result':
+        // Copy result to clipboard
+        if (item.name.startsWith('= ')) {
+          navigator.clipboard.writeText(item.name.slice(2));
+        }
+        setQuery('');
+        break;
+      case 'google':
+        openExternal(`https://www.google.com/search?q=${encodeURIComponent(query || '')}`);
+        onClose();
+        break;
+      case 'google-search':
+        openExternal(`https://www.google.com/search?q=${encodeURIComponent(query)}`);
+        onClose();
+        break;
+      case 'github':
+        openExternal(`https://github.com/search?q=${encodeURIComponent(query || '')}`);
+        onClose();
+        break;
+      case 'youtube':
+        openExternal(`https://www.youtube.com/results?search_query=${encodeURIComponent(query || '')}`);
+        onClose();
+        break;
       default:
-        item.action?.();
+        if (item.action) {
+          item.action();
+        } else if (item.type === 'link') {
+          // Generic link handling
+          onClose();
+        }
     }
   };
 

@@ -79,14 +79,64 @@ function createFlowWindow(): BrowserWindow {
 // ─────────────────────────────────────────────────────────────
 // System Tray
 // ─────────────────────────────────────────────────────────────
+function createTrayIcon(): Electron.NativeImage {
+  // Create a simple colored icon programmatically
+  // This creates a 16x16 or 22x22 icon with a simple "N" shape
+  const size = process.platform === 'darwin' ? 16 : 22;
+  const canvas = Buffer.alloc(size * size * 4); // RGBA
+
+  // Fill with Navi's accent color (indigo/purple gradient approximation)
+  const accentR = 99, accentG = 102, accentB = 241; // #6366f1
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      
+      // Create a rounded square with "N" letter shape
+      const margin = Math.floor(size * 0.1);
+      const radius = Math.floor(size * 0.2);
+      
+      // Check if pixel is within rounded rect bounds
+      const inBounds = x >= margin && x < size - margin && 
+                       y >= margin && y < size - margin;
+      
+      if (inBounds) {
+        // Simple letter "N" pattern
+        const innerMargin = Math.floor(size * 0.25);
+        const strokeWidth = Math.floor(size * 0.15);
+        
+        // Left vertical bar
+        const leftBar = x >= innerMargin && x < innerMargin + strokeWidth;
+        // Right vertical bar
+        const rightBar = x >= size - innerMargin - strokeWidth && x < size - innerMargin;
+        // Diagonal
+        const diagonalProgress = (x - innerMargin) / (size - 2 * innerMargin);
+        const expectedY = innerMargin + diagonalProgress * (size - 2 * innerMargin);
+        const diagonal = Math.abs(y - expectedY) < strokeWidth;
+        
+        if (leftBar || rightBar || diagonal) {
+          canvas[i] = accentR;     // R
+          canvas[i + 1] = accentG; // G
+          canvas[i + 2] = accentB; // B
+          canvas[i + 3] = 255;     // A
+        } else {
+          canvas[i] = 40;          // R (dark background)
+          canvas[i + 1] = 40;      // G
+          canvas[i + 2] = 40;      // B
+          canvas[i + 3] = 255;     // A
+        }
+      } else {
+        canvas[i + 3] = 0; // Transparent outside
+      }
+    }
+  }
+
+  return nativeImage.createFromBuffer(canvas, { width: size, height: size });
+}
+
 function createTray(): void {
-  // Create a simple tray icon (16x16 for macOS, 32x32 for Windows)
-  const iconSize = process.platform === 'darwin' ? 16 : 32;
-  const icon = nativeImage.createEmpty();
-  
-  // Create a simple colored circle as the tray icon
-  // In production, you would load an actual icon file
   try {
+    const icon = createTrayIcon();
     tray = new Tray(icon);
     tray.setToolTip('Navi - AI Assistant');
     

@@ -6,6 +6,9 @@ import {
   ipcMain,
   shell,
   nativeTheme,
+  Tray,
+  Menu,
+  nativeImage,
 } from 'electron';
 import path from 'path';
 
@@ -15,15 +18,17 @@ if (require('electron-squirrel-startup')) app.quit();
 // ─────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────
-const WINDOW_WIDTH = 640;
-const MIN_HEIGHT = 54;
-const MAX_HEIGHT = 480;
-const SHORTCUT = process.platform === 'darwin' ? 'Command+`' : 'Alt+Space';
+const WINDOW_WIDTH = 680;
+const MIN_HEIGHT = 120;
+const MAX_HEIGHT = 520;
+const SHORTCUT = process.platform === 'darwin' ? 'Command+Space' : 'Alt+Space';
+const FALLBACK_SHORTCUT = process.platform === 'darwin' ? 'Command+`' : 'Ctrl+Space';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
 let flowWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 
 // ─────────────────────────────────────────────────────────────
 // Window Creation
@@ -35,7 +40,7 @@ function createFlowWindow(): BrowserWindow {
     width: WINDOW_WIDTH,
     height: MIN_HEIGHT,
     x: Math.round((screenWidth - WINDOW_WIDTH) / 2),
-    y: 120,
+    y: 100,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -47,6 +52,7 @@ function createFlowWindow(): BrowserWindow {
     show: false,
     vibrancy: 'popover',
     visualEffectState: 'active',
+    titleBarStyle: 'hidden',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -58,7 +64,7 @@ function createFlowWindow(): BrowserWindow {
   // Load renderer
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     win.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-    // Open DevTools in dev mode
+    // Open DevTools in dev mode (detached)
     win.webContents.openDevTools({ mode: 'detach' });
   } else {
     win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
@@ -68,6 +74,46 @@ function createFlowWindow(): BrowserWindow {
   win.on('blur', hideFlow);
 
   return win;
+}
+
+// ─────────────────────────────────────────────────────────────
+// System Tray
+// ─────────────────────────────────────────────────────────────
+function createTray(): void {
+  // Create a simple tray icon (16x16 for macOS, 32x32 for Windows)
+  const iconSize = process.platform === 'darwin' ? 16 : 32;
+  const icon = nativeImage.createEmpty();
+  
+  // Create a simple colored circle as the tray icon
+  // In production, you would load an actual icon file
+  try {
+    tray = new Tray(icon);
+    tray.setToolTip('Navi - AI Assistant');
+    
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Open Navi',
+        click: () => toggleFlow(),
+      },
+      { type: 'separator' },
+      {
+        label: 'About Navi',
+        click: () => {
+          shell.openExternal('https://github.com/Arkane-o7/Navi');
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        click: () => app.quit(),
+      },
+    ]);
+    
+    tray.setContextMenu(contextMenu);
+    tray.on('click', () => toggleFlow());
+  } catch (error) {
+    console.log('Tray creation skipped (no icon available)');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -81,7 +127,7 @@ function showFlow(): void {
   const display = screen.getDisplayNearestPoint(cursor);
   const x = Math.round(display.workArea.x + (display.workArea.width - WINDOW_WIDTH) / 2);
 
-  flowWindow.setPosition(x, 120);
+  flowWindow.setPosition(x, 100);
   flowWindow.setSize(WINDOW_WIDTH, MIN_HEIGHT, false);
   flowWindow.show();
   flowWindow.focus();
@@ -128,14 +174,63 @@ ipcMain.on('shell:openExternal', (_e, url: string) => {
 ipcMain.handle('theme:get', () => nativeTheme.shouldUseDarkColors);
 
 // ─────────────────────────────────────────────────────────────
+// Register Global Shortcuts
+// ─────────────────────────────────────────────────────────────
+function registerShortcuts(): void {
+  // Try primary shortcut first
+  const primaryRegistered = globalShortcut.register(SHORTCUT, toggleFlow);
+  
+  if (!primaryRegistered) {
+    console.log(`Primary shortcut (${SHORTCUT}) failed, trying fallback...`);
+    // Try fallback shortcut
+    const fallbackRegistered = globalShortcut.register(FALLBACK_SHORTCUT, toggleFlow);
+    
+    if (!fallbackRegistered) {
+      console.error('Failed to register any global shortcuts');
+    } else {
+      console.log(`Using fallback shortcut: ${FALLBACK_SHORTCUT}`);
+    }
+  } else {
+    console.log(`Registered primary shortcut: ${SHORTCUT}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // App Lifecycle
 // ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
-  globalShortcut.register(SHORTCUT, toggleFlow);
+  registerShortcuts();
   flowWindow = createFlowWindow(); // Pre-create for instant open
+  createTray();
+  
+  // Keep app running in background on macOS
+  if (process.platform === 'darwin') {
+    app.dock?.hide();
+  }
 });
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  if (tray) {
+    tray.destroy();
+  }
+});
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // Don't quit on window close - keep running in tray
+  if (process.platform !== 'darwin') {
+    // On Windows/Linux, we still quit when all windows are closed
+    // unless we have a tray icon
+    if (!tray) {
+      app.quit();
+    }
+  }
+});
+
+app.on('activate', () => {
+  // On macOS, re-create window when dock icon is clicked
+  if (!flowWindow) {
+    flowWindow = createFlowWindow();
+  }
+  showFlow();
 });

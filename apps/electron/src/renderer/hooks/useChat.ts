@@ -1,4 +1,4 @@
-const API_URL = 'https://navi-chat-api.vercel.app';
+import { API_CONFIG } from '../config';
 
 interface ChatStreamOptions {
   message: string;
@@ -9,14 +9,16 @@ interface ChatStreamOptions {
 
 export async function streamChat({ message, onChunk, onDone, onError }: ChatStreamOptions) {
   try {
-    const response = await fetch(`${API_URL}/api/chat`, {
+    const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.chat}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      headers: { 
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message, stream: true }),
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
     }
 
     const reader = response.body?.getReader();
@@ -44,6 +46,9 @@ export async function streamChat({ message, onChunk, onDone, onError }: ChatStre
             if (parsed.content) {
               onChunk(parsed.content);
             }
+            if (parsed.chunk) {
+              onChunk(parsed.chunk);
+            }
           } catch {
             // Ignore parse errors
           }
@@ -53,6 +58,7 @@ export async function streamChat({ message, onChunk, onDone, onError }: ChatStre
 
     onDone();
   } catch (error) {
+    console.error('[Chat Error]', error);
     onError(error instanceof Error ? error : new Error('Unknown error'));
   }
 }

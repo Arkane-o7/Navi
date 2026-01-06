@@ -17,8 +17,11 @@ if (require('electron-squirrel-startup')) app.quit();
 // ─────────────────────────────────────────────────────────────
 const WINDOW_WIDTH = 640;
 const MIN_HEIGHT = 54;
-const MAX_HEIGHT = 480;
+const MAX_HEIGHT = 600; // Increased for richer content
 const SHORTCUT = process.platform === 'darwin' ? 'Command+`' : 'Alt+Space';
+
+// Track menu state
+let isMenuOpen = false;
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -64,8 +67,24 @@ function createFlowWindow(): BrowserWindow {
     win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   }
 
-  // Hide on blur
-  win.on('blur', hideFlow);
+  // Hide on blur only when menu is not pinned
+  win.on('blur', () => {
+    // Allow some delay to handle focus changes
+    setTimeout(() => {
+      if (!isMenuOpen && win && win.isVisible()) {
+        hideFlow();
+      }
+    }, 100);
+  });
+
+  // Handle link clicks
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:') || url.startsWith('http:')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
 
   return win;
 }
@@ -85,11 +104,13 @@ function showFlow(): void {
   flowWindow.setSize(WINDOW_WIDTH, MIN_HEIGHT, false);
   flowWindow.show();
   flowWindow.focus();
+  isMenuOpen = true;
   flowWindow.webContents.send('flow:show');
 }
 
 function hideFlow(): void {
   if (!flowWindow?.isVisible()) return;
+  isMenuOpen = false;
   flowWindow.hide();
   flowWindow.webContents.send('flow:hide');
 }
@@ -123,9 +144,16 @@ ipcMain.on('flow:resize', (_e, height: number) => {
 
 ipcMain.on('shell:openExternal', (_e, url: string) => {
   shell.openExternal(url);
+  hideFlow(); // Close window after opening external link
 });
 
 ipcMain.handle('theme:get', () => nativeTheme.shouldUseDarkColors);
+
+// Toggle menu pin state
+ipcMain.on('flow:pin', (_e, pinned: boolean) => {
+  isMenuOpen = pinned;
+  console.log(`[Pin] Menu ${pinned ? 'pinned' : 'unpinned'}`);
+});
 
 // ─────────────────────────────────────────────────────────────
 // App Lifecycle

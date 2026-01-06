@@ -11,6 +11,10 @@ const api = {
   // Theme
   getTheme: (): Promise<boolean> => ipcRenderer.invoke('theme:get'),
 
+  // Search / Launcher (Mage-inspired)
+  search: (query: string): Promise<any[]> => ipcRenderer.invoke('search:query', query),
+  execute: (action: string): Promise<any> => ipcRenderer.invoke('search:execute', action),
+
   // Events
   onShow: (callback: () => void) => {
     const handler = () => callback();

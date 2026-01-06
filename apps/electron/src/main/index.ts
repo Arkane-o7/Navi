@@ -8,6 +8,7 @@ import {
   nativeTheme,
 } from 'electron';
 import path from 'path';
+import { exec } from 'child_process';
 
 // Quit when opened by Squirrel installer
 if (require('electron-squirrel-startup')) app.quit();
@@ -233,7 +234,6 @@ ipcMain.handle('search:execute', async (_e, action: string) => {
     } else if (action === 'calculator') {
       // Open calculator app
       const calcCommand = process.platform === 'win32' ? 'calc' : 'calculator';
-      const { exec } = require('child_process');
       exec(calcCommand, (error: Error | null) => {
         if (error) {
           console.error('Failed to launch calculator:', error);
@@ -263,7 +263,6 @@ ipcMain.handle('search:execute', async (_e, action: string) => {
         return { success: false, error: 'Command not allowed' };
       }
 
-      const { exec } = require('child_process');
       exec(safeCommand, (error: Error | null) => {
         if (error) {
           console.error(`Failed to launch ${requestedCommand}:`, error);

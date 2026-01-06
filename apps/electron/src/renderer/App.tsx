@@ -325,11 +325,8 @@ export default function App() {
               className={`search-result ${index === selectedIndex ? 'selected' : ''}`}
               onClick={() => {
                 setSelectedIndex(index);
-                // Create a proper form submit event
-                const form = containerRef.current?.querySelector('form');
-                if (form) {
-                  form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                }
+                // Directly call handleSubmit with a synthetic event
+                handleSubmit({ preventDefault: () => {} } as React.FormEvent);
               }}
             >
               <div className="result-icon">{result.icon}</div>

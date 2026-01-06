@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useChatStore, Message } from './stores/chatStore';
 import { streamChat } from './hooks/useChat';
 import { Markdown } from './components/Markdown';
+import { APP_CONFIG, API_CONFIG } from './config';
 
 // ─────────────────────────────────────────────────────────────
 // Height Constants (Cerebro-style calculation)
@@ -31,6 +32,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,6 +49,28 @@ export default function App() {
 
   const conversation = getActiveConversation();
   const messages = conversation?.messages ?? [];
+
+  // ─────────────────────────────────────────────────────────────
+  // Check API Connection
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.health}`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000),
+        });
+        setConnectionStatus(response.ok ? 'connected' : 'disconnected');
+      } catch (error) {
+        console.warn('[Connection Check] Failed:', error);
+        setConnectionStatus('disconnected');
+      }
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 30000); // Check every 30s
+    return () => clearInterval(interval);
+  }, []);
 
   // ─────────────────────────────────────────────────────────────
   // Window Resize (Cerebro-style calculation)
@@ -194,6 +218,23 @@ export default function App() {
 
   return (
     <div className="flow-container" ref={containerRef}>
+      {/* Connection Status Indicator */}
+      {connectionStatus === 'disconnected' && (
+        <div style={{
+          position: 'absolute',
+          top: '8px',
+          right: '8px',
+          fontSize: '11px',
+          color: '#ff6b6b',
+          background: 'rgba(255, 107, 107, 0.1)',
+          padding: '4px 8px',
+          borderRadius: '6px',
+          zIndex: 10,
+        }}>
+          ⚠️ API Offline
+        </div>
+      )}
+
       {/* Input Bar */}
       <div className={`input-bar ${hasContent ? 'has-content' : ''}`}>
         <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

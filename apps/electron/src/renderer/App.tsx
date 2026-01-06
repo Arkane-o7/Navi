@@ -17,6 +17,7 @@ declare global {
     navi: {
       hide: () => void;
       resize: (height: number) => void;
+      pin: (pinned: boolean) => void;
       openExternal: (url: string) => void;
       getTheme: () => Promise<boolean>;
       onShow: (fn: () => void) => () => void;

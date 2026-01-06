@@ -4,6 +4,7 @@ const api = {
   // Window controls
   hide: () => ipcRenderer.send('flow:hide'),
   resize: (height: number) => ipcRenderer.send('flow:resize', height),
+  pin: (pinned: boolean) => ipcRenderer.send('flow:pin', pinned),
 
   // Shell
   openExternal: (url: string) => ipcRenderer.send('shell:openExternal', url),

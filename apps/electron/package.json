@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Navi - Spotlight-style LLM desktop app",
-  "main": ".vite/build/index.js",
+  "main": ".vite/build/main.js",
   "scripts": {
     "dev": "electron-forge start",
     "build": "electron-forge make",

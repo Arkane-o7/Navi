@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createChatCompletion, streamChatCompletion, type ChatCompletionMessage } from '@/lib/groq';
 import { sql } from '@/lib/db';
 import { checkRateLimit } from '@/lib/redis';
+import { needsSearch, searchWeb, formatSearchContext } from '@/lib/tavily';
 
 // CORS headers for Electron app
 const corsHeaders = {
@@ -67,8 +68,27 @@ export async function POST(request: NextRequest) {
 
     // For guest mode, skip database operations and just chat with Groq
     if (isGuestMode) {
+      // Check if the query needs web search for real-time information
+      let searchContext = '';
+      if (needsSearch(message)) {
+        try {
+          console.log('[Tavily] Searching for:', message);
+          const searchResults = await searchWeb(message);
+          searchContext = formatSearchContext(searchResults);
+          console.log('[Tavily] Found', searchResults.results.length, 'results');
+        } catch (error) {
+          console.error('[Tavily] Search failed:', error);
+          // Continue without search results
+        }
+      }
+
+      // Build the user message with search context if available
+      const userContent = searchContext 
+        ? `${message}\n\n${searchContext}`
+        : message;
+
       const messages: ChatCompletionMessage[] = [
-        { role: 'user' as const, content: message },
+        { role: 'user' as const, content: userContent },
       ];
 
       if (stream) {

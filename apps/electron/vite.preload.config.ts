@@ -1,17 +1,16 @@
 import { defineConfig } from 'vite';
-import path from 'path';
 
+// Note: electron-forge plugin-vite handles the build configuration
+// This config is only for additional customization
 export default defineConfig({
   build: {
-    outDir: '.vite/build',
     lib: {
-      entry: path.resolve(__dirname, 'src/preload/index.ts'),
+      entry: 'src/preload/index.ts',
       formats: ['cjs'],
       fileName: () => 'preload.js',
     },
     rollupOptions: {
       external: ['electron'],
     },
-    emptyOutDir: false,
   },
 });

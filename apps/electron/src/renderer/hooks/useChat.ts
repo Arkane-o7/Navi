@@ -1,4 +1,4 @@
-const API_URL = 'https://navi-chat-api.vercel.app';
+import { API_CONFIG } from '../config';
 
 interface ChatStreamOptions {
   message: string;
@@ -9,7 +9,7 @@ interface ChatStreamOptions {
 
 export async function streamChat({ message, onChunk, onDone, onError }: ChatStreamOptions) {
   try {
-    const response = await fetch(`${API_URL}/api/chat`, {
+    const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.chat}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),

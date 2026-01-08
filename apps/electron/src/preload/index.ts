@@ -3,7 +3,10 @@ import { contextBridge, ipcRenderer } from 'electron';
 const api = {
   // Window controls
   hide: () => ipcRenderer.send('flow:hide'),
-  resize: (height: number) => ipcRenderer.send('flow:resize', height),
+  
+  // Mouse event forwarding for click-through behavior
+  mouseEnter: () => ipcRenderer.send('flow:mouseEnter'),
+  mouseLeave: () => ipcRenderer.send('flow:mouseLeave'),
 
   // Shell
   openExternal: (url: string) => ipcRenderer.send('shell:openExternal', url),

@@ -1,18 +1,25 @@
 import { API_CONFIG } from '../config';
 
+// Message format for API (simplified from store format)
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 interface ChatStreamOptions {
   message: string;
+  history?: ChatMessage[]; // Previous messages for context
   onChunk: (content: string) => void;
   onDone: () => void;
   onError: (error: Error) => void;
 }
 
-export async function streamChat({ message, onChunk, onDone, onError }: ChatStreamOptions) {
+export async function streamChat({ message, history = [], onChunk, onDone, onError }: ChatStreamOptions) {
   try {
     const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.chat}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, history }),
     });
 
     if (!response.ok) {

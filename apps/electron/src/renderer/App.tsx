@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useChatStore, Message } from './stores/chatStore';
-import { streamChat } from './hooks/useChat';
+import { streamChat, ChatMessage } from './hooks/useChat';
 import { Markdown } from './components/Markdown';
 
 // ─────────────────────────────────────────────────────────────
@@ -138,8 +138,15 @@ export default function App() {
     // Stream response
     let fullContent = '';
 
+    // Prepare message history for context (exclude the placeholder we just added)
+    const historyForApi: ChatMessage[] = messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
     await streamChat({
       message: userInput,
+      history: historyForApi,
       onChunk: (chunk) => {
         fullContent += chunk;
         setStreamingContent(fullContent);

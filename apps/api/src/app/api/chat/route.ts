@@ -17,8 +17,15 @@ export async function OPTIONS() {
   return new Response(null, { status: 200, headers: corsHeaders });
 }
 
+// Schema for individual message in history
+const messageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string(),
+});
+
 const chatRequestSchema = z.object({
   message: z.string().min(1).max(10000),
+  history: z.array(messageSchema).optional().default([]),
   conversationId: z.string().optional(),
   stream: z.boolean().optional().default(true),
 });
@@ -64,7 +71,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { message, conversationId, stream } = parsed.data;
+    const { message, history, conversationId, stream } = parsed.data;
 
     // For guest mode, skip database operations and just chat with Groq
     if (isGuestMode) {
@@ -87,9 +94,50 @@ export async function POST(request: NextRequest) {
         ? `${message}\n\n${searchContext}`
         : message;
 
-      const messages: ChatCompletionMessage[] = [
-        { role: 'user' as const, content: userContent },
-      ];
+      // Build messages array with conversation history
+      // Use sliding window: keep last 20 messages + summarize older ones
+      const SLIDING_WINDOW_SIZE = 20;
+      let messages: ChatCompletionMessage[] = [];
+      
+      if (history.length > 0) {
+        if (history.length <= SLIDING_WINDOW_SIZE) {
+          // All history fits in window
+          messages = history.map(m => ({ 
+            role: m.role as 'user' | 'assistant', 
+            content: m.content 
+          }));
+        } else {
+          // Summarize older messages, keep recent ones
+          const olderMessages = history.slice(0, -SLIDING_WINDOW_SIZE);
+          const recentMessages = history.slice(-SLIDING_WINDOW_SIZE);
+          
+          // Create a summary of older conversation
+          const summaryText = olderMessages
+            .map(m => `${m.role}: ${m.content.slice(0, 200)}${m.content.length > 200 ? '...' : ''}`)
+            .join('\n');
+          
+          // Add summary as system context at the start
+          messages.push({
+            role: 'user' as const,
+            content: `[Previous conversation summary]:\n${summaryText}\n\n[End of summary - continuing conversation]`,
+          });
+          messages.push({
+            role: 'assistant' as const,
+            content: 'I understand the context from our previous conversation. Let me continue helping you.',
+          });
+          
+          // Add recent messages
+          messages.push(...recentMessages.map(m => ({ 
+            role: m.role as 'user' | 'assistant', 
+            content: m.content 
+          })));
+        }
+      }
+      
+      // Add current message
+      messages.push({ role: 'user' as const, content: userContent });
+      
+      console.log('[Chat] Processing with', messages.length, 'messages (history:', history.length, ')');
 
       if (stream) {
         const encoder = new TextEncoder();
@@ -147,8 +195,8 @@ export async function POST(request: NextRequest) {
       `;
     }
 
-    // Get conversation history
-    const history = await sql`
+    // Get conversation history from database
+    const dbHistory = await sql`
       SELECT role, content FROM messages
       WHERE conversation_id = ${convId}
       ORDER BY created_at ASC
@@ -156,7 +204,7 @@ export async function POST(request: NextRequest) {
     ` as Array<{ role: string; content: string }>;
 
     const messages: ChatCompletionMessage[] = [
-      ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ...dbHistory.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       { role: 'user' as const, content: message },
     ];
 

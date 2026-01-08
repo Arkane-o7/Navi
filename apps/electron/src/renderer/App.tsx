@@ -139,10 +139,14 @@ export default function App() {
     let fullContent = '';
 
     // Prepare message history for context (exclude the placeholder we just added)
+    // Note: messages is the snapshot BEFORE we added the user message, which is correct
     const historyForApi: ChatMessage[] = messages.map(m => ({
       role: m.role,
       content: m.content,
     }));
+    
+    console.log('[Submit] History being sent:', JSON.stringify(historyForApi, null, 2));
+    console.log('[Submit] Current message:', userInput);
 
     await streamChat({
       message: userInput,

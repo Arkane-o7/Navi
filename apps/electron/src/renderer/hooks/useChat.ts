@@ -16,6 +16,8 @@ interface ChatStreamOptions {
 
 export async function streamChat({ message, history = [], onChunk, onDone, onError }: ChatStreamOptions) {
   try {
+    console.log('[useChat] Making API request with:', { message, historyLength: history.length });
+    
     const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.chat}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

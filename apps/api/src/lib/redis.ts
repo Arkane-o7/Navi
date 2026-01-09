@@ -80,3 +80,55 @@ export async function setCache<T>(
 export async function deleteCache(key: string): Promise<void> {
   await redis.del(key);
 }
+
+// Daily message limit for free tier users
+const FREE_TIER_DAILY_LIMIT = 20;
+
+export async function checkDailyMessageLimit(
+  userId: string
+): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
+  // Get the start of today (UTC)
+  const now = new Date();
+  const todayKey = `daily_messages:${userId}:${now.toISOString().split('T')[0]}`;
+  
+  // Get current count
+  const currentCount = await redis.get<number>(todayKey) || 0;
+  
+  if (currentCount >= FREE_TIER_DAILY_LIMIT) {
+    // Calculate reset time (midnight UTC)
+    const tomorrow = new Date(now);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCHours(0, 0, 0, 0);
+    
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: Math.floor(tomorrow.getTime() / 1000),
+    };
+  }
+  
+  return {
+    allowed: true,
+    remaining: FREE_TIER_DAILY_LIMIT - currentCount,
+    resetAt: 0,
+  };
+}
+
+export async function incrementDailyMessageCount(userId: string): Promise<number> {
+  const now = new Date();
+  const todayKey = `daily_messages:${userId}:${now.toISOString().split('T')[0]}`;
+  
+  // Increment and set expiry to end of day + 1 hour buffer
+  const newCount = await redis.incr(todayKey);
+  
+  // Set expiry to ~25 hours from now to ensure cleanup
+  await redis.expire(todayKey, 25 * 60 * 60);
+  
+  return newCount;
+}
+
+export async function getDailyMessageCount(userId: string): Promise<number> {
+  const now = new Date();
+  const todayKey = `daily_messages:${userId}:${now.toISOString().split('T')[0]}`;
+  return await redis.get<number>(todayKey) || 0;
+}

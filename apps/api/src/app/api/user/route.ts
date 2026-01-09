@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { sql, getSubscription } from '@/lib/db';
+import { getDailyMessageCount } from '@/lib/redis';
 
 // Helper to get user ID from auth header
 function getUserIdFromHeader(request: NextRequest): string | null {
@@ -38,14 +39,32 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Fetch subscription data
+    const subscription = await getSubscription(userId);
+    
+    // Fetch daily message usage for free tier
+    let dailyMessagesUsed = 0;
+    if (subscription.tier === 'free') {
+      dailyMessagesUsed = await getDailyMessageCount(userId);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
-        id: user[0].id,
-        email: user[0].email,
-        name: user[0].name,
-        createdAt: user[0].created_at,
-        updatedAt: user[0].updated_at,
+        user: {
+          id: user[0].id,
+          email: user[0].email,
+          name: user[0].name,
+          createdAt: user[0].created_at,
+          updatedAt: user[0].updated_at,
+        },
+        subscription: {
+          tier: subscription.tier,
+          status: subscription.status,
+          periodEnd: subscription.periodEnd,
+          dailyMessagesUsed,
+          dailyMessagesLimit: subscription.tier === 'free' ? 20 : null,
+        },
       },
     });
   } catch (error) {

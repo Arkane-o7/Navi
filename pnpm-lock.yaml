@@ -38,6 +38,9 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      stripe:
+        specifier: ^20.1.2
+        version: 20.1.2(@types/node@22.19.3)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -3061,6 +3064,15 @@ packages:
   strip-outer@1.0.1:
     resolution: {integrity: sha512-k55yxKHwaXnpYGsOzg4Vl8+tDrWylxDEpknGjhTiZB8dFRU5rTo9CAzeycivxV3s+zlTKwrs6WxMxR95n26kwg==}
     engines: {node: '>=0.10.0'}
+
+  stripe@20.1.2:
+    resolution: {integrity: sha512-qU+lQRRJnTxmyvglYBPE24/IepncmywsAg0GDTsTdP2pb+3e3RdREHJZjKgqCmv0phPxN/nmgNPnIPPH8w0P4A==}
+    engines: {node: '>=16'}
+    peerDependencies:
+      '@types/node': '>=16'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   style-to-js@1.1.21:
     resolution: {integrity: sha512-RjQetxJrrUJLQPHbLku6U/ocGtzyjbJMP9lCNK7Ag0CNh690nSH8woqWH9u16nMjYBAok+i7JO1NP2pOy8IsPQ==}
@@ -6893,6 +6905,12 @@ snapshots:
   strip-outer@1.0.1:
     dependencies:
       escape-string-regexp: 1.0.5
+
+  stripe@20.1.2(@types/node@22.19.3):
+    dependencies:
+      qs: 6.14.1
+    optionalDependencies:
+      '@types/node': 22.19.3
 
   style-to-js@1.1.21:
     dependencies:

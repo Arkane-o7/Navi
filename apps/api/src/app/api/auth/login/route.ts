@@ -3,13 +3,22 @@ import { getAuthorizationUrl } from '@/lib/auth';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const redirectUri = searchParams.get('redirect_uri') || `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`;
+  
+  // Robust handling for env vars that might contain garbage (common copy-paste errors)
+  let baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://api-ten-xi-m8hwzstxh2.vercel.app').trim();
+  // Strip "NEXT_PUBLIC_APP_URL=" if it was accidentally pasted into the value
+  if (baseUrl.includes('NEXT_PUBLIC_APP_URL=')) {
+    baseUrl = baseUrl.replace('NEXT_PUBLIC_APP_URL=', '').trim();
+  }
+  
+  const redirectUri = searchParams.get('redirect_uri') || `${baseUrl}/api/auth/callback`;
   const state = searchParams.get('state') || undefined;
 
   try {
     const authUrl = getAuthorizationUrl(redirectUri, state);
 
-    return NextResponse.json({ url: authUrl });
+    // Redirect to WorkOS auth page
+    return NextResponse.redirect(authUrl);
   } catch (error) {
     console.error('Failed to generate auth URL:', error);
     return NextResponse.json(

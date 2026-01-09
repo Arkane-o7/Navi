@@ -5,7 +5,7 @@
 // Backend API URL configuration - always use Vercel in production build
 export const API_CONFIG = {
   baseUrl: 'https://api-ten-xi-m8hwzstxh2.vercel.app',
-  
+
   // API endpoints
   endpoints: {
     chat: '/api/chat',
@@ -19,14 +19,14 @@ export const API_CONFIG = {
 export const APP_CONFIG = {
   // Maximum number of messages to display
   maxMessages: 50,
-  
+
   // Window configuration
   window: {
     minHeight: 54,
     maxHeight: 600,
     width: 640,
   },
-  
+
   // Feature flags
   features: {
     // Enable launcher mode (coming soon)

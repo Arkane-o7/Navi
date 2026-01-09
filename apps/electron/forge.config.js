@@ -50,6 +50,10 @@ module.exports = {
             name: 'main_window',
             config: 'vite.renderer.config.ts',
           },
+          {
+            name: 'settings_window',
+            config: 'vite.settings.config.ts',
+          },
         ],
       },
     },

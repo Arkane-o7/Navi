@@ -1,304 +1,115 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { createChatCompletion, streamChatCompletion, type ChatCompletionMessage } from '@/lib/groq';
-import { sql } from '@/lib/db';
-import { checkRateLimit } from '@/lib/redis';
-import { needsSearch, searchWeb, formatSearchContext } from '@/lib/tavily';
-
-// CORS headers for Electron app
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
-// Handle CORS preflight
-export async function OPTIONS() {
-  return new Response(null, { status: 200, headers: corsHeaders });
-}
-
-// Schema for individual message in history
-const messageSchema = z.object({
-  role: z.enum(['user', 'assistant']),
-  content: z.string(),
-});
-
-const chatRequestSchema = z.object({
-  message: z.string().min(1).max(10000),
-  history: z.array(messageSchema).optional().default([]),
-  conversationId: z.string().optional(),
-  stream: z.boolean().optional().default(true),
-});
+import { streamChatCompletion, ChatCompletionMessage } from '@/lib/groq';
+import { getSubscription, sql } from '@/lib/db';
+import { checkDailyMessageLimit, incrementDailyMessageCount } from '@/lib/redis';
 
 // Helper to get user ID from auth header
 function getUserIdFromHeader(request: NextRequest): string | null {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) return null;
 
-  const token = authHeader.slice(7);
-  try {
-    // Decode JWT payload (basic validation)
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-    return payload.sub || null;
-  } catch {
-    return null;
-  }
+    const token = authHeader.slice(7);
+    try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        return payload.sub || null;
+    } catch {
+        return null;
+    }
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    // Get user from auth (optional for guest mode)
-    let userId = getUserIdFromHeader(request);
+    try {
+        const body = await request.json();
+        const { message, history = [] } = body;
 
-    // Allow guest access for development/testing
-    const isGuestMode = !userId;
-    if (isGuestMode) {
-      userId = 'guest-' + (request.headers.get('x-forwarded-for') || 'anonymous').split(',')[0].trim();
-    }
-
-    // Rate limiting (skip for now to debug)
-    // TODO: Re-enable rate limiting after debugging
-    // Rate limiting temporarily disabled
-
-    // Parse request
-    const body = await request.json();
-    const parsed = chatRequestSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: { code: 'INVALID_REQUEST', message: parsed.error.message } },
-        { status: 400 }
-      );
-    }
-
-    const { message, history, conversationId, stream } = parsed.data;
-
-    // For guest mode, skip database operations and just chat with Groq
-    if (isGuestMode) {
-      // Check if the query needs web search for real-time information
-      let searchContext = '';
-      if (needsSearch(message)) {
-        try {
-          console.log('[Tavily] Searching for:', message);
-          const searchResults = await searchWeb(message);
-          searchContext = formatSearchContext(searchResults);
-          console.log('[Tavily] Found', searchResults.results.length, 'results');
-        } catch (error) {
-          console.error('[Tavily] Search failed:', error);
-          // Continue without search results
+        if (!message) {
+            return NextResponse.json(
+                { success: false, error: { code: 'BAD_REQUEST', message: 'Message is required' } },
+                { status: 400 }
+            );
         }
-      }
 
-      // Build the user message with search context if available
-      const userContent = searchContext 
-        ? `${message}\n\n${searchContext}`
-        : message;
+        // Check if user is authenticated (optional for now - free tier allows anonymous)
+        const userId = getUserIdFromHeader(request);
 
-      // Build messages array with conversation history
-      // Use sliding window: keep last 20 messages + summarize older ones
-      const SLIDING_WINDOW_SIZE = 20;
-      let messages: ChatCompletionMessage[] = [];
-      
-      if (history.length > 0) {
-        if (history.length <= SLIDING_WINDOW_SIZE) {
-          // All history fits in window
-          messages = history.map(m => ({ 
-            role: m.role as 'user' | 'assistant', 
-            content: m.content 
-          }));
-        } else {
-          // Summarize older messages, keep recent ones
-          const olderMessages = history.slice(0, -SLIDING_WINDOW_SIZE);
-          const recentMessages = history.slice(-SLIDING_WINDOW_SIZE);
-          
-          // Create a summary of older conversation
-          const summaryText = olderMessages
-            .map(m => `${m.role}: ${m.content.slice(0, 200)}${m.content.length > 200 ? '...' : ''}`)
-            .join('\n');
-          
-          // Add summary as system context at the start
-          messages.push({
-            role: 'user' as const,
-            content: `[Previous conversation summary]:\n${summaryText}\n\n[End of summary - continuing conversation]`,
-          });
-          messages.push({
-            role: 'assistant' as const,
-            content: 'I understand the context from our previous conversation. Let me continue helping you.',
-          });
-          
-          // Add recent messages
-          messages.push(...recentMessages.map(m => ({ 
-            role: m.role as 'user' | 'assistant', 
-            content: m.content 
-          })));
-        }
-      }
-      
-      // Add current message
-      messages.push({ role: 'user' as const, content: userContent });
-      
-      console.log('[Chat] Processing with', messages.length, 'messages (history:', history.length, ')');
+        // For anonymous users, use IP-based rate limiting
+        const identifier = userId || request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'anonymous';
 
-      if (stream) {
-        const encoder = new TextEncoder();
+        // Check subscription status (defaults to free tier)
+        const subscription = userId ? await getSubscription(userId) : { tier: 'free' as const, status: 'active' as const, periodEnd: null };
 
-        const readable = new ReadableStream({
-          async start(controller) {
-            try {
-              for await (const chunk of streamChatCompletion(messages)) {
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ content: chunk })}\n\n`)
+        // For free tier users, check daily message limit
+        if (subscription.tier === 'free') {
+            const limitCheck = await checkDailyMessageLimit(identifier);
+            
+            if (!limitCheck.allowed) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: {
+                            code: 'DAILY_LIMIT_REACHED',
+                            message: 'You\'ve used all 20 messages for today. Come back tomorrow!',
+                            remaining: 0,
+                            resetAt: limitCheck.resetAt,
+                        }
+                    },
+                    { status: 429 }
                 );
-              }
-              controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
-              controller.close();
-            } catch (error) {
-              console.error('Stream error:', error);
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`)
-              );
-              controller.close();
             }
-          },
-        });
+        }
 
-        return new Response(readable, {
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            Connection: 'keep-alive',
-          },
-        });
-      } else {
-        const response = await createChatCompletion(messages);
-        return NextResponse.json({
-          success: true,
-          data: {
-            message: {
-              role: 'assistant',
-              content: response,
+        // For users with past due subscriptions, warn them
+        if (subscription.status === 'past_due') {
+            console.warn(`[Chat] User ${userId} has past_due subscription`);
+        }
+
+        // Increment daily message count for free tier users BEFORE streaming
+        // This ensures we count the message even if the stream fails
+        if (subscription.tier === 'free') {
+            await incrementDailyMessageCount(identifier);
+        }
+
+        // Build messages array for Groq
+        const messages: ChatCompletionMessage[] = [
+            ...history.map((msg: { role: string; content: string }) => ({
+                role: msg.role as 'user' | 'assistant',
+                content: msg.content,
+            })),
+            { role: 'user' as const, content: message },
+        ];
+
+        // Create streaming response
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+            async start(controller) {
+                try {
+                    for await (const chunk of streamChatCompletion(messages)) {
+                        const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
+                        controller.enqueue(encoder.encode(data));
+                    }
+                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                    controller.close();
+                } catch (error) {
+                    console.error('Stream error:', error);
+                    const errorData = `data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`;
+                    controller.enqueue(encoder.encode(errorData));
+                    controller.close();
+                }
             },
-          },
         });
-      }
+
+        return new NextResponse(stream, {
+            headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            },
+        });
+    } catch (error) {
+        console.error('Chat error:', error);
+        return NextResponse.json(
+            { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to process chat' } },
+            { status: 500 }
+        );
     }
-
-    // Authenticated user flow with database
-    // Get or create conversation
-    let convId = conversationId;
-    if (!convId) {
-      convId = crypto.randomUUID();
-      await sql`
-        INSERT INTO conversations (id, user_id, title)
-        VALUES (${convId}, ${userId}, ${message.slice(0, 100)})
-      `;
-    }
-
-    // Get conversation history from database
-    const dbHistory = await sql`
-      SELECT role, content FROM messages
-      WHERE conversation_id = ${convId}
-      ORDER BY created_at ASC
-      LIMIT 20
-    ` as Array<{ role: string; content: string }>;
-
-    const messages: ChatCompletionMessage[] = [
-      ...dbHistory.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-      { role: 'user' as const, content: message },
-    ];
-
-    // Save user message
-    const userMessageId = crypto.randomUUID();
-    await sql`
-      INSERT INTO messages (id, conversation_id, role, content)
-      VALUES (${userMessageId}, ${convId}, 'user', ${message})
-    `;
-
-    // Generate response
-    if (stream) {
-      // Streaming response
-      const encoder = new TextEncoder();
-      const assistantMessageId = crypto.randomUUID();
-      let fullResponse = '';
-
-      const readable = new ReadableStream({
-        async start(controller) {
-          try {
-            for await (const chunk of streamChatCompletion(messages)) {
-              fullResponse += chunk;
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ chunk, conversationId: convId })}\n\n`)
-              );
-            }
-
-            // Save assistant message
-            await sql`
-              INSERT INTO messages (id, conversation_id, role, content)
-              VALUES (${assistantMessageId}, ${convId}, 'assistant', ${fullResponse})
-            `;
-
-            // Update conversation timestamp
-            await sql`
-              UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ${convId}
-            `;
-
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ done: true, messageId: assistantMessageId, conversationId: convId })}\n\n`
-              )
-            );
-            controller.close();
-          } catch (error) {
-            console.error('Stream error:', error);
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`)
-            );
-            controller.close();
-          }
-        },
-      });
-
-      return new Response(readable, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-        },
-      });
-    } else {
-      // Non-streaming response
-      const response = await createChatCompletion(messages);
-
-      const assistantMessageId = crypto.randomUUID();
-      await sql`
-        INSERT INTO messages (id, conversation_id, role, content)
-        VALUES (${assistantMessageId}, ${convId}, 'assistant', ${response})
-      `;
-
-      await sql`
-        UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ${convId}
-      `;
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: assistantMessageId,
-          conversationId: convId,
-          message: {
-            id: assistantMessageId,
-            role: 'assistant',
-            content: response,
-            createdAt: new Date(),
-          },
-        },
-      });
-    }
-  } catch (error) {
-    console.error('Chat error:', error);
-    return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to process chat' } },
-      { status: 500 }
-    );
-  }
 }

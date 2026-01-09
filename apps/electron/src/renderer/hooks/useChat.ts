@@ -1,4 +1,5 @@
 import { API_CONFIG } from '../config';
+import { useAuthStore } from '../stores/authStore';
 
 // Message format for API (simplified from store format)
 export interface ChatMessage {
@@ -6,26 +7,72 @@ export interface ChatMessage {
   content: string;
 }
 
+// Error response from API
+export interface APIError {
+  code: string;
+  message: string;
+  remaining?: number;
+  resetAt?: number;
+  upgradeUrl?: string;
+}
+
 interface ChatStreamOptions {
   message: string;
   history?: ChatMessage[]; // Previous messages for context
   onChunk: (content: string) => void;
   onDone: () => void;
-  onError: (error: Error) => void;
+  onError: (error: Error & { code?: string; upgradeUrl?: string }) => void;
 }
 
 export async function streamChat({ message, history = [], onChunk, onDone, onError }: ChatStreamOptions) {
   try {
     console.log('[useChat] Making API request with:', { message, historyLength: history.length });
+
+    // Get auth token from store
+    const accessToken = useAuthStore.getState().accessToken;
     
+    const headers: Record<string, string> = { 
+      'Content-Type': 'application/json',
+    };
+    
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
     const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.chat}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ message, history }),
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      // Try to parse error response
+      try {
+        const errorData = await response.json();
+        const apiError = errorData.error as APIError;
+        
+        // Create error with additional properties
+        const error = new Error(apiError?.message || `API Error: ${response.status}`) as Error & { 
+          code?: string; 
+          upgradeUrl?: string;
+          resetAt?: number;
+        };
+        error.code = apiError?.code;
+        error.upgradeUrl = apiError?.upgradeUrl;
+        error.resetAt = apiError?.resetAt;
+        
+        // Update auth store if we hit daily limit
+        if (apiError?.code === 'DAILY_LIMIT_REACHED') {
+          useAuthStore.getState().updateDailyUsage(20, 20); // Mark as fully used
+        }
+        
+        throw error;
+      } catch (parseError) {
+        if (parseError instanceof Error && (parseError as Error & { code?: string }).code) {
+          throw parseError; // Re-throw if it's our custom error
+        }
+        throw new Error(`API Error: ${response.status}`);
+      }
     }
 
     const reader = response.body?.getReader();
@@ -62,6 +109,6 @@ export async function streamChat({ message, history = [], onChunk, onDone, onErr
 
     onDone();
   } catch (error) {
-    onError(error instanceof Error ? error : new Error('Unknown error'));
+    onError(error instanceof Error ? error as Error & { code?: string; upgradeUrl?: string } : new Error('Unknown error'));
   }
 }

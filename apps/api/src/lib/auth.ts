@@ -8,7 +8,8 @@ function getWorkOS(): WorkOS {
     if (!process.env.WORKOS_API_KEY) {
       throw new Error('WORKOS_API_KEY is not set');
     }
-    _workos = new WorkOS(process.env.WORKOS_API_KEY);
+    // Clean key in case of accidental whitespace/newlines
+    _workos = new WorkOS(process.env.WORKOS_API_KEY.trim());
   }
   return _workos;
 }
@@ -25,10 +26,11 @@ export function getWorkOSClientId(): string {
   if (!process.env.WORKOS_CLIENT_ID) {
     throw new Error('WORKOS_CLIENT_ID is not set');
   }
-  return process.env.WORKOS_CLIENT_ID;
+  // Clean client ID in case of accidental whitespace/newlines
+  return process.env.WORKOS_CLIENT_ID.trim();
 }
 
-export const WORKOS_CLIENT_ID = process.env.WORKOS_CLIENT_ID || '';
+export const WORKOS_CLIENT_ID = process.env.WORKOS_CLIENT_ID?.trim() || '';
 
 // Get authorization URL for email/password auth
 export function getAuthorizationUrl(redirectUri: string, state?: string) {

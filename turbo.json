@@ -1,6 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "DATABASE_URL",
+    "UPSTASH_REDIS_REST_URL",
+    "UPSTASH_REDIS_REST_TOKEN",
+    "WORKOS_API_KEY",
+    "WORKOS_CLIENT_ID",
+    "GROQ_API_KEY",
+    "TAVILY_API_KEY",
+    "NEXT_PUBLIC_APP_URL",
+    "NODE_ENV"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

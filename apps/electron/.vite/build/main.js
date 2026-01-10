@@ -66,7 +66,7 @@ function createSettingsWindow() {
     title: "Navi Settings",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: "#1c1c1e",
+    backgroundColor: "#00000000",
     show: false,
     center: true,
     webPreferences: {

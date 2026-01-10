@@ -19,7 +19,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       // Defaults
-      theme: 'system',
+      theme: 'dark',
       model: 'llama-3.3-70b-versatile',
       historyWindowSize: 20,
       

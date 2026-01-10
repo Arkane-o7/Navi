@@ -33,3 +33,5 @@ apps/electron/out/
 
 # Vercel
 .vercel/
+.vercel
+.env*.local

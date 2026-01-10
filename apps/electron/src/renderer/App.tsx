@@ -40,7 +40,6 @@ export default function App() {
   // Get theme from settings
   const { theme } = useSettingsStore();
   const { refreshAuth, syncUser } = useAuthStore();
-  const [currentTheme, setCurrentTheme] = useState(theme);
 
   // Initialize auth
   useEffect(() => {
@@ -69,10 +68,10 @@ export default function App() {
       return t;
     };
 
-    document.documentElement.setAttribute('data-theme', getEffectiveTheme(currentTheme));
+    document.documentElement.setAttribute('data-theme', getEffectiveTheme(theme));
 
     // Listen for system theme changes if using system theme
-    if (currentTheme === 'system') {
+    if (theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const handler = () => {
         document.documentElement.setAttribute('data-theme', mediaQuery.matches ? 'dark' : 'light');
@@ -80,24 +79,21 @@ export default function App() {
       mediaQuery.addEventListener('change', handler);
       return () => mediaQuery.removeEventListener('change', handler);
     }
-  }, [currentTheme]);
+  }, [theme]);
 
   // Listen for theme changes from settings window via IPC
   useEffect(() => {
     if (!window.navi?.onThemeChange) return;
 
+    const { setTheme } = useSettingsStore.getState();
+
     const unsubscribe = window.navi.onThemeChange((newTheme: string) => {
       console.log('[App] Theme changed via IPC:', newTheme);
-      setCurrentTheme(newTheme as 'system' | 'dark' | 'light');
+      setTheme(newTheme as 'system' | 'dark' | 'light');
     });
 
     return unsubscribe;
   }, []);
-
-  // Sync local state with store
-  useEffect(() => {
-    setCurrentTheme(theme);
-  }, [theme]);
 
   // ─────────────────────────────────────────────────────────────
   // Mouse Event Handlers for Click-Through Behavior

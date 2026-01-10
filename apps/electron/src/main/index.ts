@@ -225,20 +225,20 @@ ipcMain.on('settings:open', toggleSettings);
 // ─────────────────────────────────────────────────────────────
 function handleDeepLink(url: string) {
   console.log('[DeepLink] Received:', url);
-  
+
   try {
     const parsed = new URL(url);
     const path = parsed.pathname.replace(/^\/+/, ''); // Remove leading slashes
-    
+
     if (parsed.host === 'auth' || path.startsWith('auth')) {
       const route = path.replace(/^auth\/?/, '');
-      
+
       if (route === 'callback' || route === '') {
         // Successful auth callback
         const accessToken = parsed.searchParams.get('access_token');
         const refreshToken = parsed.searchParams.get('refresh_token');
         const userId = parsed.searchParams.get('user_id');
-        
+
         if (accessToken && refreshToken && userId) {
           // Send to all windows
           const authData = { accessToken, refreshToken, userId };
@@ -256,7 +256,7 @@ function handleDeepLink(url: string) {
         // Auth error
         const error = parsed.searchParams.get('error');
         const description = parsed.searchParams.get('description');
-        
+
         if (settingsWindow) {
           settingsWindow.webContents.send('auth:error', { error, description });
           settingsWindow.show();
@@ -287,7 +287,7 @@ if (!gotTheLock) {
     if (url) {
       handleDeepLink(url);
     }
-    
+
     // Focus the main window
     if (settingsWindow) {
       if (settingsWindow.isMinimized()) settingsWindow.restore();
@@ -299,7 +299,7 @@ if (!gotTheLock) {
 // IPC for initiating auth
 ipcMain.on('auth:login', () => {
   // Open browser to auth URL - the API will redirect to WorkOS
-  const apiUrl = process.env.NAVI_API_URL || 'https://api-ten-xi-m8hwzstxh2.vercel.app';
+  const apiUrl = process.env.NAVI_API_URL || 'https://navi-search.vercel.app';
   shell.openExternal(`${apiUrl}/api/auth/login`);
 });
 

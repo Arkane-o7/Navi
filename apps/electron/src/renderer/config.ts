@@ -4,7 +4,7 @@
 
 // Backend API URL configuration - always use Vercel in production build
 export const API_CONFIG = {
-  baseUrl: 'https://api-ten-xi-m8hwzstxh2.vercel.app',
+  baseUrl: 'https://navi-search.vercel.app',
 
   // API endpoints
   endpoints: {

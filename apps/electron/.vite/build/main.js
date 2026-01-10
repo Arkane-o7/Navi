@@ -209,7 +209,7 @@ if (!gotTheLock) {
   });
 }
 electron.ipcMain.on("auth:login", () => {
-  const apiUrl = process.env.NAVI_API_URL || "https://api-ten-xi-m8hwzstxh2.vercel.app";
+  const apiUrl = process.env.NAVI_API_URL || "https://navi-search.vercel.app";
   electron.shell.openExternal(`${apiUrl}/api/auth/login`);
 });
 electron.ipcMain.on("auth:logout", () => {

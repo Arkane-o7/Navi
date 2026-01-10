@@ -3,14 +3,14 @@ import { getAuthorizationUrl } from '@/lib/auth';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  
+
   // Robust handling for env vars that might contain garbage (common copy-paste errors)
-  let baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://api-ten-xi-m8hwzstxh2.vercel.app').trim();
+  let baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://navi-search.vercel.app').trim();
   // Strip "NEXT_PUBLIC_APP_URL=" if it was accidentally pasted into the value
   if (baseUrl.includes('NEXT_PUBLIC_APP_URL=')) {
     baseUrl = baseUrl.replace('NEXT_PUBLIC_APP_URL=', '').trim();
   }
-  
+
   const redirectUri = searchParams.get('redirect_uri') || `${baseUrl}/api/auth/callback`;
   const state = searchParams.get('state') || undefined;
 

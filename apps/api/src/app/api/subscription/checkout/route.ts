@@ -34,7 +34,7 @@ function getUserIdFromHeader(request: NextRequest): string | null {
 // GET: Redirect to Stripe checkout for browser-based upgrade flow
 export async function GET(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get('userId');
-  
+
   if (!userId) {
     return NextResponse.redirect(new URL('/error?message=unauthorized', request.url));
   }
@@ -82,8 +82,8 @@ export async function GET(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://api-ten-xi-m8hwzstxh2.vercel.app'}/api/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://api-ten-xi-m8hwzstxh2.vercel.app'}/api/subscription/canceled`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://navi-search.vercel.app'}/api/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://navi-search.vercel.app'}/api/subscription/canceled`,
       metadata: {
         userId: user.id,
       },
@@ -158,8 +158,8 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://api-ten-xi-m8hwzstxh2.vercel.app'}/api/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://api-ten-xi-m8hwzstxh2.vercel.app'}/api/subscription/canceled`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://navi-search.vercel.app'}/api/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://navi-search.vercel.app'}/api/subscription/canceled`,
       metadata: {
         userId: user.id,
       },

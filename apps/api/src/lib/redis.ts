@@ -5,12 +5,15 @@ let _redis: Redis | null = null;
 
 function getRedis(): Redis {
   if (!_redis) {
-    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-      throw new Error('Upstash Redis environment variables are not set');
+    const url = process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_URL;
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_TOKEN;
+
+    if (!url || !token) {
+      throw new Error('Upstash Redis environment variables are not set. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN');
     }
     _redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      url,
+      token,
     });
   }
   return _redis;
@@ -42,8 +45,8 @@ export async function checkRateLimit(
 
   if (count >= limit) {
     const oldestEntry = await redis.zrange(key, 0, 0, { withScores: true }) as Array<{ score: number; member: string }>;
-    const resetAt = oldestEntry.length > 0 
-      ? Math.ceil(oldestEntry[0].score + windowSeconds) 
+    const resetAt = oldestEntry.length > 0
+      ? Math.ceil(oldestEntry[0].score + windowSeconds)
       : now + windowSeconds;
 
     return {
@@ -90,23 +93,23 @@ export async function checkDailyMessageLimit(
   // Get the start of today (UTC)
   const now = new Date();
   const todayKey = `daily_messages:${userId}:${now.toISOString().split('T')[0]}`;
-  
+
   // Get current count
   const currentCount = await redis.get<number>(todayKey) || 0;
-  
+
   if (currentCount >= FREE_TIER_DAILY_LIMIT) {
     // Calculate reset time (midnight UTC)
     const tomorrow = new Date(now);
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
     tomorrow.setUTCHours(0, 0, 0, 0);
-    
+
     return {
       allowed: false,
       remaining: 0,
       resetAt: Math.floor(tomorrow.getTime() / 1000),
     };
   }
-  
+
   return {
     allowed: true,
     remaining: FREE_TIER_DAILY_LIMIT - currentCount,
@@ -117,13 +120,13 @@ export async function checkDailyMessageLimit(
 export async function incrementDailyMessageCount(userId: string): Promise<number> {
   const now = new Date();
   const todayKey = `daily_messages:${userId}:${now.toISOString().split('T')[0]}`;
-  
+
   // Increment and set expiry to end of day + 1 hour buffer
   const newCount = await redis.incr(todayKey);
-  
+
   // Set expiry to ~25 hours from now to ensure cleanup
   await redis.expire(todayKey, 25 * 60 * 60);
-  
+
   return newCount;
 }
 

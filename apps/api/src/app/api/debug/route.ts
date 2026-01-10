@@ -7,6 +7,9 @@ export async function GET() {
     hasRedisUrl: !!process.env.UPSTASH_REDIS_REST_URL,
     hasRedisToken: !!process.env.UPSTASH_REDIS_REST_TOKEN,
     hasDbUrl: !!process.env.DATABASE_URL,
+    hasWorkosApiKey: !!process.env.WORKOS_API_KEY,
+    hasWorkosClientId: !!process.env.WORKOS_CLIENT_ID,
+    workosClientIdPrefix: process.env.WORKOS_CLIENT_ID?.substring(0, 10) || 'not_set',
   };
 
   return NextResponse.json({

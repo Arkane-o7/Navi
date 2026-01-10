@@ -23,9 +23,12 @@ export async function GET(request: Request) {
   }
 
   try {
+    console.log('[Auth Callback] Exchanging code for tokens...');
     const { user, accessToken, refreshToken } = await authenticateWithCode(code);
+    console.log('[Auth Callback] Got user:', user.id, user.email);
 
     // Upsert user in database
+    console.log('[Auth Callback] Upserting user in database...');
     await sql`
       INSERT INTO users (id, email, name, updated_at)
       VALUES (${user.id}, ${user.email}, ${user.firstName || null}, CURRENT_TIMESTAMP)
@@ -34,6 +37,7 @@ export async function GET(request: Request) {
         name = EXCLUDED.name,
         updated_at = CURRENT_TIMESTAMP
     `;
+    console.log('[Auth Callback] User upserted successfully');
 
     // Redirect to Electron app with tokens
     // The Electron app registers a custom protocol handler (navi://)
@@ -41,8 +45,12 @@ export async function GET(request: Request) {
 
     return NextResponse.redirect(successUrl);
   } catch (err) {
-    console.error('Authentication failed:', err);
-    const errorUrl = `navi://auth/error?error=authentication_failed&description=${encodeURIComponent('Failed to authenticate')}`;
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error('[Auth Callback] Authentication failed:', errorMessage);
+    console.error('[Auth Callback] Full error:', err);
+
+    // Include more detail in the error redirect
+    const errorUrl = `navi://auth/error?error=authentication_failed&description=${encodeURIComponent(errorMessage)}`;
     return NextResponse.redirect(errorUrl);
   }
 }

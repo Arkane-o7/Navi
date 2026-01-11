@@ -20,21 +20,21 @@ interface AuthState {
   user: User | null;
   accessToken: string | null;
   refreshToken: string | null;
-  
+
   // Subscription data
   subscription: Subscription;
-  
+
   // Loading states
   isLoading: boolean;
   isAuthenticated: boolean;
-  
+
   // Actions
   setUser: (user: User | null) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
   setSubscription: (subscription: Partial<Subscription>) => void;
   updateDailyUsage: (used: number, limit: number) => void;
   logout: () => void;
-  
+
   // Async Actions
   refreshAuth: () => Promise<boolean>;
   syncUser: () => Promise<void>;
@@ -81,31 +81,31 @@ export const useAuthStore = create<AuthState>()(
       subscription: DEFAULT_SUBSCRIPTION,
       isLoading: false,
       isAuthenticated: false,
-      
+
       // Actions
-      setUser: (user) => set({ 
-        user, 
-        isAuthenticated: !!user 
+      setUser: (user) => set({
+        user,
+        isAuthenticated: !!user
       }),
-      
-      setTokens: (accessToken, refreshToken) => set({ 
-        accessToken, 
+
+      setTokens: (accessToken, refreshToken) => set({
+        accessToken,
         refreshToken,
         isAuthenticated: true,
       }),
-      
+
       setSubscription: (subscription) => set((state) => ({
         subscription: { ...state.subscription, ...subscription }
       })),
-      
+
       updateDailyUsage: (used, limit) => set((state) => ({
-        subscription: { 
-          ...state.subscription, 
+        subscription: {
+          ...state.subscription,
           dailyMessagesUsed: used,
           dailyMessagesLimit: limit,
         }
       })),
-      
+
       logout: () => set({
         user: null,
         accessToken: null,
@@ -113,11 +113,11 @@ export const useAuthStore = create<AuthState>()(
         subscription: DEFAULT_SUBSCRIPTION,
         isAuthenticated: false,
       }),
-      
+
       // Async Actions
       refreshAuth: async () => {
         const { refreshToken: token, accessToken } = get();
-        
+
         // If we have an access token, check if it's expired
         if (accessToken) {
           const decoded = decodeJwt(accessToken);
@@ -126,9 +126,9 @@ export const useAuthStore = create<AuthState>()(
             return true;
           }
         }
-        
+
         if (!token) return false;
-        
+
         try {
           // Use fetch directly to avoid circular dependency if we used an API client wrapper
           const response = await fetch(`${API_CONFIG.baseUrl}/api/auth/refresh`, {
@@ -160,12 +160,12 @@ export const useAuthStore = create<AuthState>()(
 
       syncUser: async () => {
         const { accessToken, refreshAuth } = get();
-        
+
         // Ensure we have a valid token
         const refreshed = await refreshAuth();
         if (!refreshed) {
-           // We might be just an anonymous user, that's fine.
-           return; 
+          // We might be just an anonymous user, that's fine.
+          return;
         }
 
         try {
@@ -175,14 +175,19 @@ export const useAuthStore = create<AuthState>()(
               'Authorization': `Bearer ${currentToken}`
             }
           });
-          
+
           if (response.ok) {
-            const userData = await response.json();
-            // Update subscription and user data
-            set((state) => ({
-              user: { ...state.user, ...userData.user },
-              subscription: { ...state.subscription, ...userData.subscription }
-            }));
+            const responseData = await response.json();
+            // API returns { success: true, data: { user, subscription } }
+            const userData = responseData.data || responseData;
+
+            if (userData.user) {
+              // Update subscription and user data
+              set((state) => ({
+                user: { ...state.user, ...userData.user },
+                subscription: { ...state.subscription, ...userData.subscription }
+              }));
+            }
           }
         } catch (error) {
           console.error('[AuthStore] Sync user failed:', error);
@@ -195,7 +200,7 @@ export const useAuthStore = create<AuthState>()(
         if (subscription.tier === 'pro') return true;
         return subscription.dailyMessagesUsed < subscription.dailyMessagesLimit;
       },
-      
+
       getRemainingMessages: () => {
         const { subscription } = get();
         if (subscription.tier === 'pro') return Infinity;

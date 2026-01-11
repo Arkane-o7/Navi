@@ -18,8 +18,13 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+
+  // Drag state for panel positioning
+  const [panelPosition, setPanelPosition] = useState({ x: 0, y: PANEL_TOP_OFFSET });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0, panelX: 0, panelY: 0 });
 
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -44,10 +49,15 @@ export default function App() {
   // Initialize auth and listen for auth callback from main process
   useEffect(() => {
     const { setTokens } = useAuthStore.getState();
+    const { fetchFromCloud } = useChatStore.getState();
 
     const initAuth = async () => {
       await refreshAuth();
       await syncUser();
+      // Fetch conversations from cloud if authenticated
+      if (useAuthStore.getState().isAuthenticated) {
+        fetchFromCloud();
+      }
     };
     initAuth();
 
@@ -57,6 +67,8 @@ export default function App() {
         console.log('[App] Received auth callback:', data.userId);
         setTokens(data.accessToken, data.refreshToken);
         await syncUser();
+        // Fetch conversations after sign in
+        fetchFromCloud();
       });
 
       // Refresh every 5 minutes
@@ -128,6 +140,64 @@ export default function App() {
   }, []);
 
   // ─────────────────────────────────────────────────────────────
+  // Drag Handlers for Panel Positioning
+  // ─────────────────────────────────────────────────────────────
+  const DRAG_EDGE_SIZE = 12; // pixels from edge where dragging is allowed
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    // Only drag if clicking on the panel edge (not content)
+    const target = e.target as HTMLElement;
+
+    // Never drag from interactive elements or message content
+    if (target.closest('input, button, .messages, .message-content, .prompt-overlay, a, code, pre')) return;
+
+    // Check if click is near the edge of the panel
+    if (panelRef.current) {
+      const rect = panelRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const isNearLeftEdge = x < DRAG_EDGE_SIZE;
+      const isNearRightEdge = x > rect.width - DRAG_EDGE_SIZE;
+      const isNearTopEdge = y < DRAG_EDGE_SIZE;
+      const isNearBottomEdge = y > rect.height - DRAG_EDGE_SIZE;
+
+      // Also allow drag from the input bar area (bottom 54px) and footer
+      const isInInputBar = target.closest('.input-bar');
+      const isInFooter = target.closest('.footer');
+
+      if (!isNearLeftEdge && !isNearRightEdge && !isNearTopEdge && !isNearBottomEdge && !isInInputBar && !isInFooter) {
+        return; // Not near edge or drag zone, don't start drag
+      }
+    }
+
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      panelX: panelPosition.x,
+      panelY: panelPosition.y,
+    };
+  }, [panelPosition]);
+
+  const handleDragMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging) return;
+
+    const deltaX = e.clientX - dragStartRef.current.x;
+    const deltaY = e.clientY - dragStartRef.current.y;
+
+    setPanelPosition({
+      x: dragStartRef.current.panelX + deltaX,
+      y: dragStartRef.current.panelY + deltaY,
+    });
+  }, [isDragging]);
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────
   // Auto-scroll
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -155,15 +225,6 @@ export default function App() {
       if (e.key === 'Escape') {
         window.navi?.hide();
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        if (conversation) {
-          clearConversation(conversation.id);
-        }
-        setInput('');
-        setStreamingContent('');
-        setStreamingMessageId(null);
-      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
         createConversation();
@@ -175,7 +236,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [conversation, clearConversation, createConversation]);
+  }, [createConversation]);
 
   // ─────────────────────────────────────────────────────────────
   // Submit Handler
@@ -236,9 +297,9 @@ export default function App() {
         const errorCode = (error as Error & { code?: string }).code;
 
         if (errorCode === 'DAILY_LIMIT_REACHED') {
-          // Remove the placeholder message and show upgrade prompt
-          updateMessage(convId!, assistantId, '');
-          setShowUpgradePrompt(true);
+          // Show inline message in chat instead of popup
+          const limitMessage = `**You've reached today's limit**\n\nYou've used all 20 free messages for today. Come back tomorrow for more!\n\n_Pro plan with unlimited messages coming soon._`;
+          updateMessage(convId!, assistantId, limitMessage);
         } else if (errorCode === 'UNAUTHORIZED') {
           // Show auth prompt
           updateMessage(convId!, assistantId, '');
@@ -268,17 +329,24 @@ export default function App() {
   };
 
   return (
-    <div className="overlay-container">
+    <div
+      className="overlay-container"
+      onMouseMove={handleDragMove}
+      onMouseUp={handleDragEnd}
+      onMouseLeave={handleDragEnd}
+    >
       {/* The actual command palette panel */}
       <div
-        className={`flow-panel ${hasContent ? 'expanded' : ''}`}
+        className={`flow-panel ${hasContent ? 'expanded' : ''} ${isDragging ? 'dragging' : ''}`}
         ref={panelRef}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onMouseDown={handleDragStart}
         style={{
           width: PANEL_WIDTH,
           maxHeight: PANEL_MAX_HEIGHT,
-          marginTop: PANEL_TOP_OFFSET,
+          transform: `translate(${panelPosition.x}px, ${panelPosition.y}px)`,
+          cursor: isDragging ? 'grabbing' : undefined,
         }}
       >
         {/* Messages */}
@@ -326,12 +394,12 @@ export default function App() {
           <div className="footer">
             <div className="shortcuts">
               <div className="shortcut">
-                <span className="key">⌘K</span>
-                <span>Clear</span>
-              </div>
-              <div className="shortcut">
                 <span className="key">⌘N</span>
                 <span>New</span>
+              </div>
+              <div className="shortcut">
+                <span className="key">⌘.</span>
+                <span>Settings</span>
               </div>
             </div>
             <div className="shortcut">
@@ -341,25 +409,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Daily Limit Reached Modal */}
-        {showUpgradePrompt && (
-          <div className="prompt-overlay">
-            <div className="prompt-card">
-              <div className="prompt-icon">⏰</div>
-              <h3>You've reached today's limit</h3>
-              <p>You've used all 20 free messages for today. Come back tomorrow for more!</p>
-              <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '8px' }}>Pro plan with unlimited messages coming soon.</p>
-              <div className="prompt-actions">
-                <button
-                  className="prompt-button primary"
-                  onClick={() => setShowUpgradePrompt(false)}
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* Auth Prompt Modal (optional sign-in) */}
         {showAuthPrompt && (

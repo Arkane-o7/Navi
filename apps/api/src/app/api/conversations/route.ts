@@ -98,3 +98,46 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+
+// POST - Create a new conversation
+export async function POST(request: NextRequest) {
+  const userId = getUserIdFromHeader(request);
+
+  if (!userId) {
+    return NextResponse.json(
+      { success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or missing token' } },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { id, title } = body;
+
+    // Use provided ID or generate new one
+    const conversationId = id || crypto.randomUUID();
+    const conversationTitle = title || null;
+
+    await sql`
+      INSERT INTO conversations (id, user_id, title, created_at, updated_at)
+      VALUES (${conversationId}, ${userId}, ${conversationTitle}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET updated_at = NOW()
+    `;
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        conversation: {
+          id: conversationId,
+          title: conversationTitle,
+        }
+      },
+    });
+  } catch (error) {
+    console.error('Failed to create conversation:', error);
+    return NextResponse.json(
+      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create conversation' } },
+      { status: 500 }
+    );
+  }
+}

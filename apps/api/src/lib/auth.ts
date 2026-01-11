@@ -89,3 +89,17 @@ export async function verifyToken(accessToken: string) {
 export async function getUser(userId: string) {
   return workos.userManagement.getUser(userId);
 }
+
+// Extract user ID from Authorization header
+export function getUserIdFromHeader(request: Request): string | null {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const token = authHeader.slice(7);
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    return payload.sub || null;
+  } catch {
+    return null;
+  }
+}

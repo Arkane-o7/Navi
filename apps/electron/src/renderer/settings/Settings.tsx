@@ -186,45 +186,47 @@ export default function Settings() {
                     </div>
 
                     {/* Subscription Status */}
-                    <div className="settings-item">
-                      <div className="settings-item-info" style={{ flex: 1 }}>
+                    <div className="settings-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <span className="settings-item-label">
                           {subscription.tier === 'pro' ? 'Pro Plan' : 'Free Plan'}
                         </span>
-                        {subscription.tier === 'free' && (
-                          <>
-                            <span className="settings-item-description">
-                              {subscription.dailyMessagesUsed} / {subscription.dailyMessagesLimit} messages used today
-                            </span>
-                            <div className="progress-bar-container" style={{
-                              marginTop: 8,
-                              height: 6,
-                              background: 'rgba(255,255,255,0.1)',
-                              borderRadius: 3,
-                              overflow: 'hidden'
-                            }}>
-                              <div
-                                className="progress-bar-fill"
-                                style={{
-                                  width: `${Math.min(100, (subscription.dailyMessagesUsed / subscription.dailyMessagesLimit) * 100)}%`,
-                                  height: '100%',
-                                  background: subscription.dailyMessagesUsed >= subscription.dailyMessagesLimit
-                                    ? '#ef4444'
-                                    : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
-                                  borderRadius: 3,
-                                  transition: 'width 0.3s ease'
-                                }}
-                              />
-                            </div>
-                          </>
-                        )}
-                        {subscription.tier === 'pro' && (
-                          <span className="settings-item-description">Unlimited messages</span>
+                        {subscription.tier === 'pro' ? (
+                          <span className="settings-badge" style={{ background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }}>Active</span>
+                        ) : (
+                          <span className="settings-badge">Pro Coming Soon</span>
                         )}
                       </div>
-                      <span className="settings-badge">
-                        {subscription.tier === 'pro' ? 'Active' : 'Pro Coming Soon'}
-                      </span>
+                      {subscription.tier === 'free' && (
+                        <>
+                          <div className="progress-bar-container" style={{
+                            height: 6,
+                            background: 'rgba(255,255,255,0.1)',
+                            borderRadius: 3,
+                            overflow: 'hidden',
+                            marginBottom: 6
+                          }}>
+                            <div
+                              className="progress-bar-fill"
+                              style={{
+                                width: `${Math.min(100, (subscription.dailyMessagesUsed / subscription.dailyMessagesLimit) * 100)}%`,
+                                height: '100%',
+                                background: subscription.dailyMessagesUsed >= subscription.dailyMessagesLimit
+                                  ? '#ef4444'
+                                  : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+                                borderRadius: 3,
+                                transition: 'width 0.3s ease'
+                              }}
+                            />
+                          </div>
+                          <span className="settings-item-description" style={{ margin: 0 }}>
+                            {subscription.dailyMessagesUsed} / {subscription.dailyMessagesLimit} messages used today
+                          </span>
+                        </>
+                      )}
+                      {subscription.tier === 'pro' && (
+                        <span className="settings-item-description" style={{ margin: 0 }}>Unlimited messages</span>
+                      )}
                     </div>
                   </>
                 ) : (

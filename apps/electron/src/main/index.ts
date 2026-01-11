@@ -25,10 +25,11 @@ if (process.defaultApp) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Constants
+// Constants - Platform-specific shortcuts
 // ─────────────────────────────────────────────────────────────
-const SHORTCUT = process.platform === 'darwin' ? 'Command+`' : 'Alt+Space';
-const SETTINGS_SHORTCUT = 'CommandOrControl+.';
+const isMac = process.platform === 'darwin';
+const SHORTCUT = isMac ? 'Command+`' : 'Alt+Space';
+const SETTINGS_SHORTCUT = isMac ? 'Command+.' : 'Alt+.';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;

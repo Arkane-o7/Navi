@@ -13,6 +13,11 @@ const PANEL_MIN_HEIGHT = 54; // Input only
 const PANEL_MAX_HEIGHT = 480; // Max expanded height
 const PANEL_TOP_OFFSET = 120; // Distance from top of screen
 
+// Platform detection for keyboard shortcuts
+const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+const MOD_KEY = isMac ? '⌘' : 'Alt';
+const MOD_SYMBOL = isMac ? '⌘' : 'Alt+';
+
 export default function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -222,10 +227,13 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Platform-specific modifier key
+      const modPressed = isMac ? e.metaKey : e.altKey;
+
       if (e.key === 'Escape') {
         window.navi?.hide();
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+      if (modPressed && e.key === 'n') {
         e.preventDefault();
         createConversation();
         setInput('');
@@ -394,11 +402,11 @@ export default function App() {
           <div className="footer">
             <div className="shortcuts">
               <div className="shortcut">
-                <span className="key">⌘N</span>
+                <span className="key">{MOD_SYMBOL}N</span>
                 <span>New</span>
               </div>
               <div className="shortcut">
-                <span className="key">⌘.</span>
+                <span className="key">{MOD_SYMBOL}.</span>
                 <span>Settings</span>
               </div>
             </div>

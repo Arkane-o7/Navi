@@ -9,8 +9,9 @@ if (process.defaultApp) {
 } else {
   electron.app.setAsDefaultProtocolClient(PROTOCOL);
 }
-const SHORTCUT = process.platform === "darwin" ? "Command+`" : "Alt+Space";
-const SETTINGS_SHORTCUT = "CommandOrControl+.";
+const isMac = process.platform === "darwin";
+const SHORTCUT = isMac ? "Command+`" : "Alt+Space";
+const SETTINGS_SHORTCUT = isMac ? "Command+." : "Alt+.";
 let flowWindow = null;
 let settingsWindow = null;
 function createFlowWindow() {

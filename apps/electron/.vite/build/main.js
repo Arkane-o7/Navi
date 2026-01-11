@@ -38,14 +38,16 @@ function createFlowWindow() {
       preload: path.join(__dirname, "index.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
-      webSecurity: false
+      sandbox: false
+      // webSecurity enabled by default in production
     }
   });
   win.setIgnoreMouseEvents(true, { forward: true });
   {
     win.loadURL("http://localhost:5175");
-    win.webContents.openDevTools({ mode: "detach" });
+    if (process.env.NODE_ENV === "development") {
+      win.webContents.openDevTools({ mode: "detach" });
+    }
   }
   win.on("blur", () => {
     setTimeout(() => {
@@ -73,8 +75,8 @@ function createSettingsWindow() {
       preload: path.join(__dirname, "index.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
-      webSecurity: false
+      sandbox: false
+      // webSecurity enabled by default in production
     }
   });
   console.log("[Settings] Dev URL:", "http://localhost:5176");

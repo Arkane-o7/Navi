@@ -3,7 +3,7 @@ module.exports = {
     name: 'Navi',
     executableName: 'navi',
     asar: true,
-    icon: './assets/icon',
+    icon: './assets/icon',  // Electron will look for icon.png, icon.ico, icon.icns
     appBundleId: 'com.navi.app',
     appCategoryType: 'public.app-category.productivity',
     darwinDarkModeSupport: true,

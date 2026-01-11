@@ -79,10 +79,10 @@ export async function initializeDatabase() {
 // Helper functions for subscriptions
 export async function getSubscription(userId: string) {
   const result = await sql`
-    SELECT tier, status, current_period_end
+    SELECT tier, status, period_end
     FROM subscriptions
     WHERE user_id = ${userId}
-  ` as Array<{ tier: string; status: string; current_period_end: string | null }>;
+  ` as Array<{ tier: string; status: string; period_end: string | null }>;
 
   if (result.length === 0) {
     // Return default free tier for users without subscription record
@@ -92,7 +92,7 @@ export async function getSubscription(userId: string) {
   return {
     tier: result[0].tier as 'free' | 'pro',
     status: result[0].status as 'active' | 'canceled' | 'past_due' | 'trialing',
-    periodEnd: result[0].current_period_end,
+    periodEnd: result[0].period_end,
   };
 }
 

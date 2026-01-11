@@ -43,7 +43,7 @@ function createFlowWindow() {
   });
   win.setIgnoreMouseEvents(true, { forward: true });
   {
-    win.loadURL("http://localhost:5183");
+    win.loadURL("http://localhost:5173");
     win.webContents.openDevTools({ mode: "detach" });
   }
   win.on("blur", () => {
@@ -76,10 +76,10 @@ function createSettingsWindow() {
       webSecurity: false
     }
   });
-  console.log("[Settings] Dev URL:", "http://localhost:5184");
+  console.log("[Settings] Dev URL:", "http://localhost:5174");
   console.log("[Settings] Vite Name:", "settings_window");
   {
-    win.loadURL(`${"http://localhost:5184"}/settings.html`);
+    win.loadURL(`${"http://localhost:5174"}/settings.html`);
   }
   win.once("ready-to-show", () => {
     win.show();

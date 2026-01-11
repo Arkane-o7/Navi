@@ -41,19 +41,40 @@ export default function App() {
   const { theme } = useSettingsStore();
   const { refreshAuth, syncUser } = useAuthStore();
 
-  // Initialize auth
+  // Initialize auth and listen for auth callback from main process
   useEffect(() => {
+    const { setTokens } = useAuthStore.getState();
+
     const initAuth = async () => {
       await refreshAuth();
       await syncUser();
     };
     initAuth();
-    
-    // Refresh every 5 minutes
+
+    // Listen for auth callback from main process (when user signs in via Settings)
+    if (window.navi?.onAuthCallback) {
+      const unsubAuth = window.navi.onAuthCallback(async (data) => {
+        console.log('[App] Received auth callback:', data.userId);
+        setTokens(data.accessToken, data.refreshToken);
+        await syncUser();
+      });
+
+      // Refresh every 5 minutes
+      const interval = setInterval(() => {
+        refreshAuth();
+      }, 5 * 60 * 1000);
+
+      return () => {
+        unsubAuth();
+        clearInterval(interval);
+      };
+    }
+
+    // Refresh every 5 minutes (fallback if no IPC)
     const interval = setInterval(() => {
       refreshAuth();
     }, 5 * 60 * 1000);
-    
+
     return () => clearInterval(interval);
   }, [refreshAuth, syncUser]);
 
@@ -213,7 +234,7 @@ export default function App() {
       onError: (error) => {
         // Handle specific error codes
         const errorCode = (error as Error & { code?: string }).code;
-        
+
         if (errorCode === 'DAILY_LIMIT_REACHED') {
           // Remove the placeholder message and show upgrade prompt
           updateMessage(convId!, assistantId, '');
@@ -225,7 +246,7 @@ export default function App() {
         } else {
           updateMessage(convId!, assistantId, `Error: ${error.message}`);
         }
-        
+
         setStreamingContent('');
         setStreamingMessageId(null);
         setIsLoading(false);
@@ -329,7 +350,7 @@ export default function App() {
               <p>You've used all 20 free messages for today. Come back tomorrow for more!</p>
               <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '8px' }}>Pro plan with unlimited messages coming soon.</p>
               <div className="prompt-actions">
-                <button 
+                <button
                   className="prompt-button primary"
                   onClick={() => setShowUpgradePrompt(false)}
                 >
@@ -348,7 +369,7 @@ export default function App() {
               <h3>Sign in for more features</h3>
               <p>Create a free account to sync your conversations across devices.</p>
               <div className="prompt-actions">
-                <button 
+                <button
                   className="prompt-button primary"
                   onClick={() => {
                     window.navi?.login();
@@ -357,7 +378,7 @@ export default function App() {
                 >
                   Sign In
                 </button>
-                <button 
+                <button
                   className="prompt-button secondary"
                   onClick={() => setShowAuthPrompt(false)}
                 >

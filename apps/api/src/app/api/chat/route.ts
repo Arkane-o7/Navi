@@ -31,9 +31,11 @@ export async function POST(request: NextRequest) {
 
         // Check if user is authenticated (optional for now - free tier allows anonymous)
         const userId = getUserIdFromHeader(request);
+        console.log('[Chat] userId from token:', userId);
 
         // For anonymous users, use IP-based rate limiting
         const identifier = userId || request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'anonymous';
+        console.log('[Chat] identifier for rate limiting:', identifier);
 
         // Check subscription status (defaults to free tier)
         const subscription = userId ? await getSubscription(userId) : { tier: 'free' as const, status: 'active' as const, periodEnd: null };
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest) {
         // For free tier users, check daily message limit
         if (subscription.tier === 'free') {
             const limitCheck = await checkDailyMessageLimit(identifier);
-            
+
             if (!limitCheck.allowed) {
                 return NextResponse.json(
                     {
@@ -65,8 +67,11 @@ export async function POST(request: NextRequest) {
 
         // Increment daily message count for free tier users BEFORE streaming
         // This ensures we count the message even if the stream fails
+        // Use userId if available for consistent counting with /api/user endpoint
         if (subscription.tier === 'free') {
-            await incrementDailyMessageCount(identifier);
+            const countIdentifier = userId || identifier;
+            console.log('[Chat] Incrementing count for:', countIdentifier);
+            await incrementDailyMessageCount(countIdentifier);
         }
 
         // Build messages array for Groq

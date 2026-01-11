@@ -180,14 +180,18 @@ export const useAuthStore = create<AuthState>()(
             const responseData = await response.json();
             // API returns { success: true, data: { user, subscription } }
             const userData = responseData.data || responseData;
+            console.log('[AuthStore] syncUser response:', userData);
 
             if (userData.user) {
               // Update subscription and user data
+              console.log('[AuthStore] Updating user and subscription:', userData.subscription);
               set((state) => ({
                 user: { ...state.user, ...userData.user },
                 subscription: { ...state.subscription, ...userData.subscription }
               }));
             }
+          } else {
+            console.error('[AuthStore] syncUser failed with status:', response.status);
           }
         } catch (error) {
           console.error('[AuthStore] Sync user failed:', error);

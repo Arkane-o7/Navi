@@ -21,7 +21,7 @@ const THEMES = [
 export default function Settings() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const [authError, setAuthError] = useState<string | null>(null);
-  
+
   const { theme, model, setTheme, setModel } = useSettingsStore();
   const { user, subscription, isAuthenticated, setUser, setTokens, logout, syncUser } = useAuthStore();
 
@@ -46,11 +46,35 @@ export default function Settings() {
     }
   }, [theme]);
 
-  // Sync user data on mount
+  // Sync user data on mount and when window becomes visible/focused
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isAuthenticated) {
+        console.log('[Settings] Window visible, syncing user data');
+        syncUser();
+      }
+    };
+
+    const handleFocus = () => {
+      if (isAuthenticated) {
+        console.log('[Settings] Window focused, syncing user data');
+        syncUser();
+      }
+    };
+
+    // Initial sync on mount
     if (isAuthenticated) {
       syncUser();
     }
+
+    // Listen for visibility changes and focus events
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [isAuthenticated, syncUser]);
 
   // Listen for auth events
@@ -60,10 +84,10 @@ export default function Settings() {
     const unsubCallback = window.navi.onAuthCallback(async (data) => {
       console.log('[Settings] Auth callback received:', data.userId);
       setTokens(data.accessToken, data.refreshToken);
-      
+
       // Fetch user info via store action
       await syncUser();
-      
+
       setAuthError(null);
     });
 
@@ -160,16 +184,47 @@ export default function Settings() {
                         Sign Out
                       </button>
                     </div>
-                    
+
                     {/* Subscription Status */}
                     <div className="settings-item">
-                      <div className="settings-item-info">
-                        <span className="settings-item-label">Free Plan</span>
-                        <span className="settings-item-description">
-                          20 messages per day • Pro plan coming soon!
+                      <div className="settings-item-info" style={{ flex: 1 }}>
+                        <span className="settings-item-label">
+                          {subscription.tier === 'pro' ? 'Pro Plan' : 'Free Plan'}
                         </span>
+                        {subscription.tier === 'free' && (
+                          <>
+                            <span className="settings-item-description">
+                              {subscription.dailyMessagesUsed} / {subscription.dailyMessagesLimit} messages used today
+                            </span>
+                            <div className="progress-bar-container" style={{
+                              marginTop: 8,
+                              height: 6,
+                              background: 'rgba(255,255,255,0.1)',
+                              borderRadius: 3,
+                              overflow: 'hidden'
+                            }}>
+                              <div
+                                className="progress-bar-fill"
+                                style={{
+                                  width: `${Math.min(100, (subscription.dailyMessagesUsed / subscription.dailyMessagesLimit) * 100)}%`,
+                                  height: '100%',
+                                  background: subscription.dailyMessagesUsed >= subscription.dailyMessagesLimit
+                                    ? '#ef4444'
+                                    : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+                                  borderRadius: 3,
+                                  transition: 'width 0.3s ease'
+                                }}
+                              />
+                            </div>
+                          </>
+                        )}
+                        {subscription.tier === 'pro' && (
+                          <span className="settings-item-description">Unlimited messages</span>
+                        )}
                       </div>
-                      <span className="settings-badge">Pro Coming Soon</span>
+                      <span className="settings-badge">
+                        {subscription.tier === 'pro' ? 'Active' : 'Pro Coming Soon'}
+                      </span>
                     </div>
                   </>
                 ) : (

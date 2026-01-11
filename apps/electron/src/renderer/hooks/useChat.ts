@@ -30,11 +30,11 @@ export async function streamChat({ message, history = [], onChunk, onDone, onErr
 
     // Get auth token from store
     const accessToken = useAuthStore.getState().accessToken;
-    
-    const headers: Record<string, string> = { 
+
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    
+
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
     }
@@ -50,22 +50,22 @@ export async function streamChat({ message, history = [], onChunk, onDone, onErr
       try {
         const errorData = await response.json();
         const apiError = errorData.error as APIError;
-        
+
         // Create error with additional properties
-        const error = new Error(apiError?.message || `API Error: ${response.status}`) as Error & { 
-          code?: string; 
+        const error = new Error(apiError?.message || `API Error: ${response.status}`) as Error & {
+          code?: string;
           upgradeUrl?: string;
           resetAt?: number;
         };
         error.code = apiError?.code;
         error.upgradeUrl = apiError?.upgradeUrl;
         error.resetAt = apiError?.resetAt;
-        
+
         // Update auth store if we hit daily limit
         if (apiError?.code === 'DAILY_LIMIT_REACHED') {
           useAuthStore.getState().updateDailyUsage(20, 20); // Mark as fully used
         }
-        
+
         throw error;
       } catch (parseError) {
         if (parseError instanceof Error && (parseError as Error & { code?: string }).code) {
@@ -108,6 +108,12 @@ export async function streamChat({ message, history = [], onChunk, onDone, onErr
     }
 
     onDone();
+
+    // Sync user data to update daily message count
+    // Only if user is authenticated
+    if (useAuthStore.getState().isAuthenticated) {
+      useAuthStore.getState().syncUser();
+    }
   } catch (error) {
     onError(error instanceof Error ? error as Error & { code?: string; upgradeUrl?: string } : new Error('Unknown error'));
   }

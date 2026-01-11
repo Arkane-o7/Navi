@@ -1,7 +1,6 @@
 "use strict";
 const electron = require("electron");
 const path = require("path");
-if (require("electron-squirrel-startup")) electron.app.quit();
 const PROTOCOL = "navi";
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
@@ -44,7 +43,7 @@ function createFlowWindow() {
   });
   win.setIgnoreMouseEvents(true, { forward: true });
   {
-    win.loadURL("http://localhost:5173");
+    win.loadURL("http://localhost:5177");
     win.webContents.openDevTools({ mode: "detach" });
   }
   win.on("blur", () => {
@@ -77,10 +76,10 @@ function createSettingsWindow() {
       webSecurity: false
     }
   });
-  console.log("[Settings] Dev URL:", "http://localhost:5174");
+  console.log("[Settings] Dev URL:", "http://localhost:5178");
   console.log("[Settings] Vite Name:", "settings_window");
   {
-    win.loadURL(`${"http://localhost:5174"}/settings.html`);
+    win.loadURL(`${"http://localhost:5178"}/settings.html`);
   }
   win.once("ready-to-show", () => {
     win.show();

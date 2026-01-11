@@ -7,6 +7,13 @@ module.exports = {
     appBundleId: 'com.navi.app',
     appCategoryType: 'public.app-category.productivity',
     darwinDarkModeSupport: true,
+    // Register navi:// URL scheme for deep linking (OAuth callbacks)
+    protocols: [
+      {
+        name: 'Navi',
+        schemes: ['navi']
+      }
+    ],
   },
   rebuildConfig: {},
   makers: [

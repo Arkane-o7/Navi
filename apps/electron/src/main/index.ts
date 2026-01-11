@@ -9,8 +9,8 @@ import {
 } from 'electron';
 import path from 'path';
 
-// Quit when opened by Squirrel installer
-if (require('electron-squirrel-startup')) app.quit();
+// Note: electron-squirrel-startup is only needed for Windows Squirrel installer
+// It's not bundled in production builds, so we skip it on non-Windows platforms
 
 // ─────────────────────────────────────────────────────────────
 // Deep Link Protocol (navi://)

@@ -45,13 +45,6 @@ const api = {
     const handler = () => callback();
     electron.ipcRenderer.on("flow:hide", handler);
     return () => electron.ipcRenderer.removeListener("flow:hide", handler);
-  },
-  // Message sync - notify other windows when a message is sent
-  messageSent: () => electron.ipcRenderer.send("chat:messageSent"),
-  onMessageSent: (callback) => {
-    const handler = () => callback();
-    electron.ipcRenderer.on("chat:messageSent", handler);
-    return () => electron.ipcRenderer.removeListener("chat:messageSent", handler);
   }
 };
 electron.contextBridge.exposeInMainWorld("navi", api);

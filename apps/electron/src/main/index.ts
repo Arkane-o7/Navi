@@ -224,13 +224,6 @@ ipcMain.on('settings:setTheme', (_e, theme: string) => {
 
 ipcMain.on('settings:open', toggleSettings);
 
-// Chat sync - broadcast message sent to Settings window for counter refresh
-ipcMain.on('chat:messageSent', () => {
-  if (settingsWindow) {
-    settingsWindow.webContents.send('chat:messageSent');
-  }
-});
-
 // ─────────────────────────────────────────────────────────────
 // Auth - Deep Link Handling
 // ─────────────────────────────────────────────────────────────

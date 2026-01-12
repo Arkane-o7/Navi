@@ -38,10 +38,6 @@ declare global {
       // Events
       onShow: (fn: () => void) => () => void;
       onHide: (fn: () => void) => () => void;
-
-      // Chat sync
-      messageSent: () => void;
-      onMessageSent: (fn: () => void) => () => void;
     };
   }
 }

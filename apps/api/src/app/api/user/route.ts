@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
           status: subscription.status,
           periodEnd: subscription.periodEnd,
           dailyMessagesUsed,
-          dailyMessagesLimit: 20, // Always return 20... for pro tier this is ignored in UI
+          dailyMessagesLimit: subscription.tier === 'free' ? 20 : null,
         },
       },
     });

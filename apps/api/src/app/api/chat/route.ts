@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { streamChatCompletion, ChatCompletionMessage } from '@/lib/groq';
 import { getSubscription, sql } from '@/lib/db';
 import { checkDailyMessageLimit, incrementDailyMessageCount } from '@/lib/redis';
+import { needsSearch, searchWeb, formatSearchContext } from '@/lib/tavily';
 
 // Helper to get user ID from auth header
 function getUserIdFromHeader(request: NextRequest): string | null {
@@ -63,11 +64,26 @@ export async function POST(request: NextRequest) {
         }
 
         // Increment daily message count for free tier users
-        // IMPORTANT: Use userId (not IP-based identifier) for authenticated users
-        // This ensures the count matches what /api/user returns
+        // Note: We do this AFTER checks but it's fast enough to not block
         if (subscription.tier === 'free') {
             const countIdentifier = userId || identifier;
-            await incrementDailyMessageCount(countIdentifier);
+            // Fire and forget - don't await to avoid blocking the stream
+            incrementDailyMessageCount(countIdentifier).catch(console.error);
+        }
+
+        // Check if message needs web search for real-time information
+        let enhancedMessage = message;
+        if (needsSearch(message)) {
+            try {
+                const searchResults = await searchWeb(message, { maxResults: 5 });
+                const searchContext = formatSearchContext(searchResults);
+                if (searchContext) {
+                    enhancedMessage = message + searchContext;
+                }
+            } catch (error) {
+                console.error('[Chat] Web search failed, continuing without:', error);
+                // Continue without search results - graceful degradation
+            }
         }
 
         // Build messages array for Groq
@@ -76,7 +92,7 @@ export async function POST(request: NextRequest) {
                 role: msg.role as 'user' | 'assistant',
                 content: msg.content,
             })),
-            { role: 'user' as const, content: message },
+            { role: 'user' as const, content: enhancedMessage },
         ];
 
         // Create streaming response

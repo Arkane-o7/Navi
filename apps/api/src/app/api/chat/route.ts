@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { streamChatCompletion, ChatCompletionMessage } from '@/lib/groq';
 import { getSubscription, sql } from '@/lib/db';
-import { checkDailyMessageLimit, incrementDailyMessageCount, FREE_TIER_DAILY_LIMIT } from '@/lib/redis';
+import { checkDailyMessageLimit, incrementDailyMessageCount } from '@/lib/redis';
 
+// Helper to get user ID from auth header
 function getUserIdFromHeader(request: NextRequest): string | null {
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) return null;
@@ -30,33 +31,30 @@ export async function POST(request: NextRequest) {
 
         // Check if user is authenticated (optional for now - free tier allows anonymous)
         const userId = getUserIdFromHeader(request);
-        console.log('[Chat] userId from token:', userId);
 
         // For anonymous users, use IP-based rate limiting
         const identifier = userId || request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'anonymous';
-        console.log('[Chat] identifier for rate limiting:', identifier);
 
-        // Check subscription status (defaults to free tier)
-        const subscription = userId ? await getSubscription(userId) : { tier: 'free' as const, status: 'active' as const, periodEnd: null };
+        // Run subscription and rate limit checks in PARALLEL for better performance
+        const [subscription, limitCheck] = await Promise.all([
+            userId ? getSubscription(userId) : Promise.resolve({ tier: 'free' as const, status: 'active' as const, periodEnd: null }),
+            checkDailyMessageLimit(identifier),
+        ]);
 
         // For free tier users, check daily message limit
-        if (subscription.tier === 'free') {
-            const limitCheck = await checkDailyMessageLimit(identifier);
-
-            if (!limitCheck.allowed) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        error: {
-                            code: 'DAILY_LIMIT_REACHED',
-                            message: `You've used all ${FREE_TIER_DAILY_LIMIT} messages for today. Come back tomorrow!`,
-                            remaining: 0,
-                            resetAt: limitCheck.resetAt,
-                        }
-                    },
-                    { status: 429 }
-                );
-            }
+        if (subscription.tier === 'free' && !limitCheck.allowed) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: {
+                        code: 'DAILY_LIMIT_REACHED',
+                        message: 'You\'ve used all 20 messages for today. Come back tomorrow!',
+                        remaining: 0,
+                        resetAt: limitCheck.resetAt,
+                    }
+                },
+                { status: 429 }
+            );
         }
 
         // For users with past due subscriptions, warn them
@@ -64,13 +62,12 @@ export async function POST(request: NextRequest) {
             console.warn(`[Chat] User ${userId} has past_due subscription`);
         }
 
-        // Increment daily message count for free tier users BEFORE streaming
-        // This ensures we count the message even if the stream fails
-        // Use userId if available for consistent counting with /api/user endpoint
+        // Increment daily message count for free tier users
+        // Note: We do this AFTER checks but it's fast enough to not block
         if (subscription.tier === 'free') {
             const countIdentifier = userId || identifier;
-            console.log('[Chat] Incrementing count for:', countIdentifier);
-            await incrementDailyMessageCount(countIdentifier);
+            // Fire and forget - don't await to avoid blocking the stream
+            incrementDailyMessageCount(countIdentifier).catch(console.error);
         }
 
         // Build messages array for Groq

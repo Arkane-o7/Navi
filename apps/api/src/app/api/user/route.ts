@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql, getSubscription } from '@/lib/db';
-import { getDailyMessageCount, FREE_TIER_DAILY_LIMIT } from '@/lib/redis';
+import { getDailyMessageCount } from '@/lib/redis';
 
-
+// Helper to get user ID from auth header
 function getUserIdFromHeader(request: NextRequest): string | null {
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) return null;
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
           status: subscription.status,
           periodEnd: subscription.periodEnd,
           dailyMessagesUsed,
-          dailyMessagesLimit: subscription.tier === 'free' ? FREE_TIER_DAILY_LIMIT : null,
+          dailyMessagesLimit: subscription.tier === 'free' ? 20 : null,
         },
       },
     });

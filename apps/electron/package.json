@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "electron-forge start",
     "build": "electron-forge make",
+    "make": "electron-forge make",
     "package": "electron-forge package",
+    "publish": "electron-forge publish",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

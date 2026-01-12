@@ -227,10 +227,23 @@ electron.app.whenReady().then(() => {
   if (isMac) {
     electron.app.dock.hide();
   }
-  const iconName = isMac ? "trayIconTemplate.png" : "trayIcon.png";
-  const iconPath = path.join(__dirname, "../../assets", iconName);
-  tray = new electron.Tray(iconPath);
+  function getTrayIconPath() {
+    if (isMac) {
+      return path.join(__dirname, "../../assets/trayIconTemplate.png");
+    } else {
+      const iconName = electron.nativeTheme.shouldUseDarkColors ? "trayIcon-light.png" : "trayIcon-dark.png";
+      return path.join(__dirname, "../../assets", iconName);
+    }
+  }
+  tray = new electron.Tray(getTrayIconPath());
   tray.setToolTip("Navi");
+  if (!isMac) {
+    electron.nativeTheme.on("updated", () => {
+      if (tray) {
+        tray.setImage(getTrayIconPath());
+      }
+    });
+  }
   const contextMenu = electron.Menu.buildFromTemplate([
     {
       label: "Toggle Navi",

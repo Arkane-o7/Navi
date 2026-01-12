@@ -329,13 +329,30 @@ app.whenReady().then(() => {
     app.dock.hide();
   }
 
-  // Create tray icon (menu bar on macOS, system tray on Windows/Linux)
-  // On macOS, use Template icon (16x16/32x32) for proper menu bar appearance
-  // On Windows/Linux, use 32x32 tray icon
-  const iconName = isMac ? 'trayIconTemplate.png' : 'trayIcon.png';
-  const iconPath = path.join(__dirname, '../../assets', iconName);
-  tray = new Tray(iconPath);
+  // Helper to get the correct tray icon based on platform and theme
+  function getTrayIconPath(): string {
+    if (isMac) {
+      // macOS: Template icons auto-adapt to light/dark menu bar
+      return path.join(__dirname, '../../assets/trayIconTemplate.png');
+    } else {
+      // Windows/Linux: Use light icon on dark theme, dark icon on light theme
+      const iconName = nativeTheme.shouldUseDarkColors ? 'trayIcon-light.png' : 'trayIcon-dark.png';
+      return path.join(__dirname, '../../assets', iconName);
+    }
+  }
+
+  // Create tray icon
+  tray = new Tray(getTrayIconPath());
   tray.setToolTip('Navi');
+
+  // Update tray icon when system theme changes (Windows/Linux)
+  if (!isMac) {
+    nativeTheme.on('updated', () => {
+      if (tray) {
+        tray.setImage(getTrayIconPath());
+      }
+    });
+  }
 
   const contextMenu = Menu.buildFromTemplate([
     {

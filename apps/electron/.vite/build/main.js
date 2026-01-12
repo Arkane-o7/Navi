@@ -227,7 +227,8 @@ electron.app.whenReady().then(() => {
   if (isMac) {
     electron.app.dock.hide();
   }
-  const iconPath = path.join(__dirname, "../../assets/icon.png");
+  const iconName = isMac ? "trayIconTemplate.png" : "trayIcon.png";
+  const iconPath = path.join(__dirname, "../../assets", iconName);
   tray = new electron.Tray(iconPath);
   tray.setToolTip("Navi");
   const contextMenu = electron.Menu.buildFromTemplate([

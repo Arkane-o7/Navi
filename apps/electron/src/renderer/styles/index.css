@@ -227,8 +227,8 @@ body {
 }
 
 .message-avatar {
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -244,8 +244,8 @@ body {
 }
 
 .message-avatar.assistant {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  /* No background - just show the logo */
+  background: transparent;
 }
 
 .message-content {

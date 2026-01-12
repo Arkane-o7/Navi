@@ -85,7 +85,7 @@ export async function deleteCache(key: string): Promise<void> {
 }
 
 // Daily message limit for free tier users
-const FREE_TIER_DAILY_LIMIT = 20;
+export const FREE_TIER_DAILY_LIMIT = 20;
 
 export async function checkDailyMessageLimit(
   userId: string

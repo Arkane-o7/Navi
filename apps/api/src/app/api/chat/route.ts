@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { streamChatCompletion, ChatCompletionMessage } from '@/lib/groq';
 import { getSubscription, sql } from '@/lib/db';
-import { checkDailyMessageLimit, incrementDailyMessageCount } from '@/lib/redis';
+import { checkDailyMessageLimit, incrementDailyMessageCount, FREE_TIER_DAILY_LIMIT } from '@/lib/redis';
 
-// Helper to get user ID from auth header
 function getUserIdFromHeader(request: NextRequest): string | null {
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) return null;
@@ -50,7 +49,7 @@ export async function POST(request: NextRequest) {
                         success: false,
                         error: {
                             code: 'DAILY_LIMIT_REACHED',
-                            message: 'You\'ve used all 20 messages for today. Come back tomorrow!',
+                            message: `You've used all ${FREE_TIER_DAILY_LIMIT} messages for today. Come back tomorrow!`,
                             remaining: 0,
                             resetAt: limitCheck.resetAt,
                         }

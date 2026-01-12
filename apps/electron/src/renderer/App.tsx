@@ -371,7 +371,7 @@ export default function App() {
                     <img
                       src={theme === 'light' ? logoDark : logoLight}
                       alt="Navi"
-                      style={{ width: 18, height: 18 }}
+                      style={{ width: 32, height: 32 }}
                     />
                   </div>
                 )}

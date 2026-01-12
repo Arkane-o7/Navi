@@ -5,6 +5,10 @@ import { useAuthStore } from './stores/authStore';
 import { streamChat, ChatMessage } from './hooks/useChat';
 import { Markdown } from './components/Markdown';
 
+// Logo images for light/dark modes
+import logoDark from '../../assets/logo-dark.png';
+import logoLight from '../../assets/logo-light.png';
+
 // ─────────────────────────────────────────────────────────────
 // Panel Constants (CSS-based sizing)
 // ─────────────────────────────────────────────────────────────
@@ -363,7 +367,13 @@ export default function App() {
             {messages.map((msg) => (
               <div key={msg.id} className={`message ${msg.role}`}>
                 {msg.role === 'assistant' && (
-                  <div className="message-avatar assistant">N</div>
+                  <div className="message-avatar assistant">
+                    <img
+                      src={theme === 'light' ? logoDark : logoLight}
+                      alt="Navi"
+                      style={{ width: 18, height: 18 }}
+                    />
+                  </div>
                 )}
                 <div className="message-content">
                   <Markdown content={getMessageContent(msg)} />

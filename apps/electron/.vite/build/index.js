@@ -1,1 +1,50 @@
-"use strict";const e=require("electron"),i={hide:()=>e.ipcRenderer.send("flow:hide"),mouseEnter:()=>e.ipcRenderer.send("flow:mouseEnter"),mouseLeave:()=>e.ipcRenderer.send("flow:mouseLeave"),openExternal:n=>e.ipcRenderer.send("shell:openExternal",n),getTheme:()=>e.ipcRenderer.invoke("theme:get"),setTheme:n=>e.ipcRenderer.send("settings:setTheme",n),onThemeChange:n=>{const r=(t,o)=>n(o);return e.ipcRenderer.on("settings:themeChanged",r),()=>e.ipcRenderer.removeListener("settings:themeChanged",r)},login:()=>e.ipcRenderer.send("auth:login"),logout:()=>e.ipcRenderer.send("auth:logout"),onAuthCallback:n=>{const r=(t,o)=>n(o);return e.ipcRenderer.on("auth:callback",r),()=>e.ipcRenderer.removeListener("auth:callback",r)},onAuthError:n=>{const r=(t,o)=>n(o);return e.ipcRenderer.on("auth:error",r),()=>e.ipcRenderer.removeListener("auth:error",r)},onLogout:n=>{const r=()=>n();return e.ipcRenderer.on("auth:logout",r),()=>e.ipcRenderer.removeListener("auth:logout",r)},onShow:n=>{const r=()=>n();return e.ipcRenderer.on("flow:show",r),()=>e.ipcRenderer.removeListener("flow:show",r)},onHide:n=>{const r=()=>n();return e.ipcRenderer.on("flow:hide",r),()=>e.ipcRenderer.removeListener("flow:hide",r)}};e.contextBridge.exposeInMainWorld("navi",i);
+"use strict";
+const electron = require("electron");
+const api = {
+  // Window controls
+  hide: () => electron.ipcRenderer.send("flow:hide"),
+  // Mouse event forwarding for click-through behavior
+  mouseEnter: () => electron.ipcRenderer.send("flow:mouseEnter"),
+  mouseLeave: () => electron.ipcRenderer.send("flow:mouseLeave"),
+  // Shell
+  openExternal: (url) => electron.ipcRenderer.send("shell:openExternal", url),
+  // Theme
+  getTheme: () => electron.ipcRenderer.invoke("theme:get"),
+  // Settings sync - broadcast theme changes to all windows
+  setTheme: (theme) => electron.ipcRenderer.send("settings:setTheme", theme),
+  onThemeChange: (callback) => {
+    const handler = (_event, theme) => callback(theme);
+    electron.ipcRenderer.on("settings:themeChanged", handler);
+    return () => electron.ipcRenderer.removeListener("settings:themeChanged", handler);
+  },
+  // Auth
+  login: () => electron.ipcRenderer.send("auth:login"),
+  logout: () => electron.ipcRenderer.send("auth:logout"),
+  onAuthCallback: (callback) => {
+    const handler = (_event, data) => callback(data);
+    electron.ipcRenderer.on("auth:callback", handler);
+    return () => electron.ipcRenderer.removeListener("auth:callback", handler);
+  },
+  onAuthError: (callback) => {
+    const handler = (_event, data) => callback(data);
+    electron.ipcRenderer.on("auth:error", handler);
+    return () => electron.ipcRenderer.removeListener("auth:error", handler);
+  },
+  onLogout: (callback) => {
+    const handler = () => callback();
+    electron.ipcRenderer.on("auth:logout", handler);
+    return () => electron.ipcRenderer.removeListener("auth:logout", handler);
+  },
+  // Events
+  onShow: (callback) => {
+    const handler = () => callback();
+    electron.ipcRenderer.on("flow:show", handler);
+    return () => electron.ipcRenderer.removeListener("flow:show", handler);
+  },
+  onHide: (callback) => {
+    const handler = () => callback();
+    electron.ipcRenderer.on("flow:hide", handler);
+    return () => electron.ipcRenderer.removeListener("flow:hide", handler);
+  }
+};
+electron.contextBridge.exposeInMainWorld("navi", api);

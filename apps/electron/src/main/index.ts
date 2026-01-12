@@ -6,6 +6,8 @@ import {
   ipcMain,
   shell,
   nativeTheme,
+  Tray,
+  Menu,
 } from 'electron';
 import path from 'path';
 
@@ -38,6 +40,7 @@ declare const SETTINGS_WINDOW_VITE_NAME: string;
 
 let flowWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 
 // ─────────────────────────────────────────────────────────────
 // Window Creation - Full Screen Overlay Approach
@@ -321,6 +324,35 @@ ipcMain.on('auth:logout', () => {
 // App Lifecycle
 // ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
+  // Hide from dock on macOS (show only in menu bar)
+  if (isMac) {
+    app.dock.hide();
+  }
+
+  // Create tray icon (menu bar on macOS, system tray on Windows/Linux)
+  const iconPath = path.join(__dirname, '../../assets/icon.png');
+  tray = new Tray(iconPath);
+  tray.setToolTip('Navi');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Toggle Navi',
+      accelerator: isMac ? 'Cmd+`' : 'Alt+Space',
+      click: toggleFlow
+    },
+    {
+      label: 'Settings',
+      accelerator: isMac ? 'Cmd+.' : 'Alt+.',
+      click: toggleSettings
+    },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() }
+  ]);
+  tray.setContextMenu(contextMenu);
+
+  // Click on tray icon to toggle Navi
+  tray.on('click', toggleFlow);
+
   globalShortcut.register(SHORTCUT, toggleFlow);
   globalShortcut.register(SETTINGS_SHORTCUT, toggleSettings);
   flowWindow = createFlowWindow();
@@ -328,5 +360,6 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // Keep app running in background (it's a tray app)
+  // Only quit explicitly via tray menu
 });

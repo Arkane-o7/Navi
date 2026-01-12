@@ -14,6 +14,7 @@ const SHORTCUT = isMac ? "Command+`" : "Alt+Space";
 const SETTINGS_SHORTCUT = isMac ? "Command+." : "Alt+.";
 let flowWindow = null;
 let settingsWindow = null;
+let tray = null;
 function createFlowWindow() {
   const primaryDisplay = electron.screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
@@ -223,11 +224,32 @@ electron.ipcMain.on("auth:logout", () => {
   }
 });
 electron.app.whenReady().then(() => {
+  if (isMac) {
+    electron.app.dock.hide();
+  }
+  const iconPath = path.join(__dirname, "../../assets/icon.png");
+  tray = new electron.Tray(iconPath);
+  tray.setToolTip("Navi");
+  const contextMenu = electron.Menu.buildFromTemplate([
+    {
+      label: "Toggle Navi",
+      accelerator: isMac ? "Cmd+`" : "Alt+Space",
+      click: toggleFlow
+    },
+    {
+      label: "Settings",
+      accelerator: isMac ? "Cmd+." : "Alt+.",
+      click: toggleSettings
+    },
+    { type: "separator" },
+    { label: "Quit", click: () => electron.app.quit() }
+  ]);
+  tray.setContextMenu(contextMenu);
+  tray.on("click", toggleFlow);
   electron.globalShortcut.register(SHORTCUT, toggleFlow);
   electron.globalShortcut.register(SETTINGS_SHORTCUT, toggleSettings);
   flowWindow = createFlowWindow();
 });
 electron.app.on("will-quit", () => electron.globalShortcut.unregisterAll());
 electron.app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") electron.app.quit();
 });

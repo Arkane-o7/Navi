@@ -303,6 +303,8 @@ export default function App() {
         setStreamingMessageId(null);
         setIsLoading(false);
         inputRef.current?.focus();
+        // Notify Settings window to refresh message count
+        window.navi?.messageSent?.();
       },
       onError: (error) => {
         // Handle specific error codes

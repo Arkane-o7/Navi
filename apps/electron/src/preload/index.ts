@@ -64,6 +64,14 @@ const api = {
     ipcRenderer.on('flow:hide', handler);
     return () => ipcRenderer.removeListener('flow:hide', handler);
   },
+
+  // Message sync - notify other windows when a message is sent
+  messageSent: () => ipcRenderer.send('chat:messageSent'),
+  onMessageSent: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('chat:messageSent', handler);
+    return () => ipcRenderer.removeListener('chat:messageSent', handler);
+  },
 };
 
 contextBridge.exposeInMainWorld('navi', api);

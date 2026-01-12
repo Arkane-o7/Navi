@@ -71,9 +71,18 @@ export default function Settings() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
 
+    // Listen for message sent events from Flow window
+    const unsubMessageSent = window.navi?.onMessageSent?.(() => {
+      if (isAuthenticated) {
+        console.log('[Settings] Message sent, refreshing count');
+        syncUser();
+      }
+    });
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
+      unsubMessageSent?.();
     };
   }, [isAuthenticated, syncUser]);
 

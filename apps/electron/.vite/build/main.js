@@ -153,6 +153,11 @@ electron.ipcMain.on("settings:setTheme", (_e, theme) => {
   }
 });
 electron.ipcMain.on("settings:open", toggleSettings);
+electron.ipcMain.on("chat:messageSent", () => {
+  if (settingsWindow) {
+    settingsWindow.webContents.send("chat:messageSent");
+  }
+});
 function handleDeepLink(url) {
   console.log("[DeepLink] Received:", url);
   try {

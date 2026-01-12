@@ -19,25 +19,29 @@ declare global {
       resize: (height: number) => void;
       mouseEnter: () => void;
       mouseLeave: () => void;
-      
+
       // Shell
       openExternal: (url: string) => void;
-      
+
       // Theme
       getTheme: () => Promise<boolean>;
       setTheme: (theme: string) => void;
       onThemeChange: (callback: (theme: string) => void) => () => void;
-      
+
       // Auth
       login: () => void;
       logout: () => void;
       onAuthCallback: (callback: (data: AuthCallbackData) => void) => () => void;
       onAuthError: (callback: (data: AuthErrorData) => void) => () => void;
       onLogout: (callback: () => void) => () => void;
-      
+
       // Events
       onShow: (fn: () => void) => () => void;
       onHide: (fn: () => void) => () => void;
+
+      // Chat sync
+      messageSent: () => void;
+      onMessageSent: (fn: () => void) => () => void;
     };
   }
 }

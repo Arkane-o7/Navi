@@ -330,7 +330,9 @@ app.whenReady().then(() => {
   }
 
   // Create tray icon (menu bar on macOS, system tray on Windows/Linux)
-  const iconPath = path.join(__dirname, '../../assets/icon.png');
+  // On macOS, use Template icon (16x16/32x32) for proper menu bar appearance
+  const iconName = isMac ? 'trayIconTemplate.png' : 'icon.png';
+  const iconPath = path.join(__dirname, '../../assets', iconName);
   tray = new Tray(iconPath);
   tray.setToolTip('Navi');
 

@@ -1,8 +1,6 @@
 // Using fetch directly instead of groq-sdk due to Vercel compatibility issues
 
-// Use llama-3.1-8b-instant for fastest responses
-// Other options: llama-3.3-70b-versatile (smarter but slower), mixtral-8x7b-32768
-export const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+export const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 export const SYSTEM_PROMPT = `You are Navi, a helpful AI assistant. You are concise, friendly, and helpful.

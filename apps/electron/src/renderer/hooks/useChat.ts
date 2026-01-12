@@ -28,6 +28,9 @@ export async function streamChat({ message, history = [], onChunk, onDone, onErr
   try {
     // Get auth token from store
     const accessToken = useAuthStore.getState().accessToken;
+    const isAuthenticated = useAuthStore.getState().isAuthenticated;
+    console.log('[useChat] Auth state:', { isAuthenticated, hasToken: !!accessToken, tokenPrefix: accessToken?.substring(0, 20) + '...' });
+    console.log('[useChat] Making API request with:', { message, historyLength: history.length });
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -35,6 +38,9 @@ export async function streamChat({ message, history = [], onChunk, onDone, onErr
 
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
+      console.log('[useChat] Authorization header set');
+    } else {
+      console.log('[useChat] No access token, request will be anonymous');
     }
 
     const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.chat}`, {
@@ -106,6 +112,12 @@ export async function streamChat({ message, history = [], onChunk, onDone, onErr
     }
 
     onDone();
+
+    // Sync user data to update daily message count
+    // Only if user is authenticated
+    if (useAuthStore.getState().isAuthenticated) {
+      useAuthStore.getState().syncUser();
+    }
   } catch (error) {
     onError(error instanceof Error ? error as Error & { code?: string; upgradeUrl?: string } : new Error('Unknown error'));
   }

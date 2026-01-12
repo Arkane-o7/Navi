@@ -63,11 +63,11 @@ export async function POST(request: NextRequest) {
         }
 
         // Increment daily message count for free tier users
-        // Note: We do this AFTER checks but it's fast enough to not block
+        // IMPORTANT: Use userId (not IP-based identifier) for authenticated users
+        // This ensures the count matches what /api/user returns
         if (subscription.tier === 'free') {
             const countIdentifier = userId || identifier;
-            // Fire and forget - don't await to avoid blocking the stream
-            incrementDailyMessageCount(countIdentifier).catch(console.error);
+            await incrementDailyMessageCount(countIdentifier);
         }
 
         // Build messages array for Groq

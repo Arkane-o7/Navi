@@ -21,7 +21,7 @@ module.exports = {
       name: '@electron-forge/maker-squirrel',
       config: {
         name: 'Navi',
-        iconUrl: 'https://raw.githubusercontent.com/your-repo/assets/icon.ico',
+        iconUrl: 'https://raw.githubusercontent.com/Arkane-o7/Navi/main/apps/electron/assets/icon.png',
       },
     },
     {
@@ -62,6 +62,19 @@ module.exports = {
             config: 'vite.settings.config.ts',
           },
         ],
+      },
+    },
+  ],
+  publishers: [
+    {
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: {
+          owner: 'Arkane-o7',
+          name: 'Navi',
+        },
+        prerelease: false,
+        draft: true, // Create as draft so you can review before publishing
       },
     },
   ],

@@ -8,8 +8,10 @@ import {
   nativeTheme,
   Tray,
   Menu,
+  dialog,
 } from 'electron';
 import path from 'path';
+import { autoUpdater } from 'electron-updater';
 
 // Note: electron-squirrel-startup is only needed for Windows Squirrel installer
 // It's not bundled in production builds, so we skip it on non-Windows platforms
@@ -41,6 +43,48 @@ declare const SETTINGS_WINDOW_VITE_NAME: string;
 let flowWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+
+// ─────────────────────────────────────────────────────────────
+// Auto-Update Setup
+// ─────────────────────────────────────────────────────────────
+function setupAutoUpdater() {
+  // Disable auto-download, we'll prompt the user first
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Available',
+      message: `A new version (${info.version}) is available. Would you like to download it now?`,
+      buttons: ['Download', 'Later'],
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.downloadUpdate();
+      }
+    });
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Ready',
+      message: 'Update downloaded. The app will restart to install the update.',
+      buttons: ['Restart Now', 'Later'],
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
+  });
+
+  autoUpdater.on('error', (error) => {
+    console.error('Auto-update error:', error);
+  });
+
+  // Check for updates (silently, in background)
+  autoUpdater.checkForUpdates().catch(console.error);
+}
 
 // ─────────────────────────────────────────────────────────────
 // Window Creation - Full Screen Overlay Approach
@@ -376,6 +420,11 @@ app.whenReady().then(() => {
   globalShortcut.register(SHORTCUT, toggleFlow);
   globalShortcut.register(SETTINGS_SHORTCUT, toggleSettings);
   flowWindow = createFlowWindow();
+
+  // Setup auto-updater (only in production builds)
+  if (!MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    setupAutoUpdater();
+  }
 });
 
 app.on('will-quit', () => globalShortcut.unregisterAll());

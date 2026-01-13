@@ -22,6 +22,7 @@ module.exports = {
       config: {
         name: 'Navi',
         iconUrl: 'https://raw.githubusercontent.com/Arkane-o7/Navi/main/apps/electron/assets/icon.png',
+        setupIcon: './assets/icon.ico',
       },
     },
     {

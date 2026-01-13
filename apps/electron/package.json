@@ -1,6 +1,6 @@
 {
   "name": "@navi/electron",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Navi - Spotlight-style LLM desktop app",
   "main": ".vite/build/main.js",

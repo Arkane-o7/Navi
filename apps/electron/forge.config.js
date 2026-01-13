@@ -21,6 +21,7 @@ module.exports = {
       name: '@electron-forge/maker-squirrel',
       config: {
         name: 'Navi',
+        authors: 'Arkane-o7',
         iconUrl: 'https://raw.githubusercontent.com/Arkane-o7/Navi/main/apps/electron/assets/icon.ico',
         setupIcon: './assets/icon.ico',
       },

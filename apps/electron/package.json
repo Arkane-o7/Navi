@@ -1,8 +1,9 @@
 {
   "name": "@navi/electron",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Navi - Spotlight-style LLM desktop app",
+  "author": "Arkane-o7",
   "main": ".vite/build/main.js",
   "scripts": {
     "dev": "electron-forge start",

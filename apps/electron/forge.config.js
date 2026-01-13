@@ -7,6 +7,10 @@ module.exports = {
     appBundleId: 'com.navi.app',
     appCategoryType: 'public.app-category.productivity',
     darwinDarkModeSupport: true,
+    // Ad-hoc signing for macOS (free, but users still need to right-click → Open)
+    osxSign: {
+      identity: '-',  // Ad-hoc signing (no Apple Developer account needed)
+    },
     // Copy assets to resources folder for production tray icons
     extraResource: ['./assets'],
     // Register navi:// URL scheme for deep linking (OAuth callbacks)

@@ -7,6 +7,8 @@ module.exports = {
     appBundleId: 'com.navi.app',
     appCategoryType: 'public.app-category.productivity',
     darwinDarkModeSupport: true,
+    // Copy assets to resources folder for production tray icons
+    extraResource: ['./assets'],
     // Register navi:// URL scheme for deep linking (OAuth callbacks)
     protocols: [
       {

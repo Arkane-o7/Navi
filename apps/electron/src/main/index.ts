@@ -375,13 +375,19 @@ app.whenReady().then(() => {
 
   // Helper to get the correct tray icon based on platform and theme
   function getTrayIconPath(): string {
+    // In packaged app, assets are in resources/assets
+    // In dev, they're relative to the compiled main.js
+    const assetsPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'assets')
+      : path.join(__dirname, '../../assets');
+
     if (isMac) {
       // macOS: Template icons auto-adapt to light/dark menu bar
-      return path.join(__dirname, '../../assets/trayIconTemplate.png');
+      return path.join(assetsPath, 'trayIconTemplate.png');
     } else {
       // Windows/Linux: Use light icon on dark theme, dark icon on light theme
       const iconName = nativeTheme.shouldUseDarkColors ? 'trayIcon-light.png' : 'trayIcon-dark.png';
-      return path.join(__dirname, '../../assets', iconName);
+      return path.join(assetsPath, iconName);
     }
   }
 

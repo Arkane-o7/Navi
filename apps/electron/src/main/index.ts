@@ -32,7 +32,7 @@ if (process.defaultApp) {
 // Constants - Platform-specific shortcuts
 // ─────────────────────────────────────────────────────────────
 const isMac = process.platform === 'darwin';
-const SHORTCUT = isMac ? 'Command+`' : 'Alt+Space';
+const SHORTCUT = isMac ? 'Command+`' : 'Alt+`';
 const SETTINGS_SHORTCUT = isMac ? 'Command+.' : 'Alt+.';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
@@ -407,7 +407,7 @@ app.whenReady().then(() => {
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Toggle Navi',
-      accelerator: isMac ? 'Cmd+`' : 'Alt+Space',
+      accelerator: isMac ? 'Cmd+`' : 'Alt+`',
       click: toggleFlow
     },
     {

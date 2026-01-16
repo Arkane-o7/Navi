@@ -4,15 +4,19 @@ import { Laptop } from "lucide-react";
 export function Hero() {
     return (
         <div className="hero-v2 relative flex flex-col items-center gap-8 lg:gap-16 pb-20 overflow-hidden">
-            {/* Background Image */}
-            <div className="absolute inset-0 -z-10 w-full h-full">
-                <Image
-                    src="/images/background.png"
-                    alt="Background"
-                    fill
-                    className="object-cover object-top"
-                    priority
-                />
+            {/* Background Video */}
+            <div className="absolute inset-0 -z-10 w-full h-full overflow-hidden">
+                <video
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="absolute top-0 left-0 w-full h-full object-cover"
+                >
+                    <source src="/media/hero-bg.mp4" type="video/mp4" />
+                </video>
+                {/* Dark overlay for better text readability */}
+                <div className="absolute inset-0 bg-black/40" />
             </div>
             <div className="relative w-full pt-32 lg:pt-40">
                 <section className="flex h-full items-start justify-center">

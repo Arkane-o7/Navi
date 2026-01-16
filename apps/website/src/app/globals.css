@@ -15,52 +15,57 @@
 
     --radius-xl: 0.75rem;
     --radius-2xl: 1rem;
-    --radius-3xl: 1.5rem;
     --radius-4xl: 2rem;
 }
 
 /* Custom Utilities from Cluely */
-@utility perspective-midrange {
-    perspective: 800px;
-}
-
-@utility blue-gradient-button {
-    background: linear-gradient(180deg, #3377FF 0%, #1d4ed8 100%);
-    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.1), inset 0px 1px 0px rgba(255, 255, 255, 0.2);
-}
-
 @utility purple-gradient-button {
-    background: linear-gradient(180deg, #1C1D22 0%, #000000 100%);
-    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.1), inset 0px 1px 0px rgba(255, 255, 255, 0.1);
+    background: radial-gradient(179.05% 132.83% at 46.18% -23.44%, #1562df 0%, #0c26a8 100%);
+    box-shadow: 0px 0px 0px 0.67755px #0c44a1, inset 0px -1.3551px 0px #022c70, inset 0px 0.67755px 0px #81b6ff, 0px 9.00227px 27.907px rgba(107, 109, 231, 0.77), 0px 178.891px 50.1437px transparent, 0px 115.195px 46.0779px rgba(0, 0, 0, 0.02), 0px 65.0514px 39.3015px rgba(0, 0, 0, 0.08), 0px 28.4599px 28.4599px rgba(0, 0, 0, 0.13), 0px 6.77615px 16.2628px rgba(0, 0, 0, 0.16);
 }
 
 @utility blurred-border {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask-composite: exclude;
-    padding: 1px;
+    border-radius: 12px;
 }
 
-:root {
-    --background: #ffffff;
-    --foreground: #19191d;
+@utility perspective-midrange {
+    perspective: 2000px;
 }
 
+@utility hero-v2 {
+    background-image: image-set(url("/images/background.png") 1x,
+            url("/images/background@2x.png") 2x,
+            url("/images/background@4x.png") 4x);
+    background-position: top;
+    background-repeat: no-repeat;
+    background-size: max(100vw, 100rem);
+}
+
+/* Base Styles */
 body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
     font-family: var(--font-sans);
-    background-color: var(--background);
-    color: var(--foreground);
-    -webkit-font-smoothing: antialiased;
+}
+
+.dark body {
+    background-color: #000;
+    color: #fff;
 }
 
 /* Cluely specific tweaks */
-.hero-v2 {
-    background: radial-gradient(50% 50% at 50% 50%, rgba(225, 234, 253, 0.4) 0%, rgba(225, 234, 253, 0) 100%);
+.purple-gradient-button:after {
+    content: "";
+    mix-blend-mode: overlay;
+    border-radius: inherit;
+    z-index: 0;
+    opacity: 0;
+    background: radial-gradient(101.79% 101.79% at 65.61% 81.79%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+    transition: opacity 0.3s ease-in-out;
+    position: absolute;
+    inset: 1px;
 }
 
-.text-gradient {
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    background-image: linear-gradient(90deg, #19191D 0%, #626275 100%);
+.purple-gradient-button:hover:after {
+    opacity: 0.4;
 }

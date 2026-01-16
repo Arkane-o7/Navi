@@ -15323,7 +15323,7 @@ if (process.defaultApp) {
   require$$1$3.app.setAsDefaultProtocolClient(PROTOCOL);
 }
 const isMac = process.platform === "darwin";
-const SHORTCUT = isMac ? "Command+`" : "Alt+Space";
+const SHORTCUT = isMac ? "Command+`" : "Alt+`";
 const SETTINGS_SHORTCUT = isMac ? "Command+." : "Alt+.";
 let flowWindow = null;
 let settingsWindow = null;
@@ -15541,11 +15541,12 @@ require$$1$3.app.whenReady().then(() => {
     require$$1$3.app.dock.hide();
   }
   function getTrayIconPath() {
+    const assetsPath = require$$1$3.app.isPackaged ? require$$1$1.join(process.resourcesPath, "assets") : require$$1$1.join(__dirname, "../../assets");
     if (isMac) {
-      return require$$1$1.join(__dirname, "../../assets/trayIconTemplate.png");
+      return require$$1$1.join(assetsPath, "trayIconTemplate.png");
     } else {
       const iconName = require$$1$3.nativeTheme.shouldUseDarkColors ? "trayIcon-light.png" : "trayIcon-dark.png";
-      return require$$1$1.join(__dirname, "../../assets", iconName);
+      return require$$1$1.join(assetsPath, iconName);
     }
   }
   tray = new require$$1$3.Tray(getTrayIconPath());
@@ -15560,7 +15561,7 @@ require$$1$3.app.whenReady().then(() => {
   const contextMenu = require$$1$3.Menu.buildFromTemplate([
     {
       label: "Toggle Navi",
-      accelerator: isMac ? "Cmd+`" : "Alt+Space",
+      accelerator: isMac ? "Cmd+`" : "Alt+`",
       click: toggleFlow
     },
     {

@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+
+@theme {
+    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-serif: 'EB Garamond', serif;
+
+    --color-background: #ffffff;
+    --color-foreground: #19191d;
+
+    --color-primary-blue: #3152f4;
+    --color-secondary-blue: #dde2ee;
+
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
+    --radius-3xl: 1.5rem;
+    --radius-4xl: 2rem;
+}
+
+/* Custom Utilities from Cluely */
+@utility perspective-midrange {
+    perspective: 800px;
+}
+
+@utility blue-gradient-button {
+    background: linear-gradient(180deg, #3377FF 0%, #1d4ed8 100%);
+    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.1), inset 0px 1px 0px rgba(255, 255, 255, 0.2);
+}
+
+@utility purple-gradient-button {
+    background: linear-gradient(180deg, #1C1D22 0%, #000000 100%);
+    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.1), inset 0px 1px 0px rgba(255, 255, 255, 0.1);
+}
+
+@utility blurred-border {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    padding: 1px;
+}
+
+:root {
+    --background: #ffffff;
+    --foreground: #19191d;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Cluely specific tweaks */
+.hero-v2 {
+    background: radial-gradient(50% 50% at 50% 50%, rgba(225, 234, 253, 0.4) 0%, rgba(225, 234, 253, 0) 100%);
+}
+
+.text-gradient {
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    background-image: linear-gradient(90deg, #19191D 0%, #626275 100%);
+}

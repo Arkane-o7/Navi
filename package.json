@@ -9,8 +9,10 @@
     "lint": "turbo lint",
     "dev:electron": "pnpm --filter @navi/electron dev",
     "dev:api": "pnpm --filter @navi/api dev",
+    "dev:website": "pnpm --filter @navi/website dev",
     "build:electron": "pnpm --filter @navi/electron build",
-    "build:api": "pnpm --filter @navi/api build"
+    "build:api": "pnpm --filter @navi/api build",
+    "build:website": "pnpm --filter @navi/website build"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

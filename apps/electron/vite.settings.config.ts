@@ -6,7 +6,10 @@ export default defineConfig({
   plugins: [react()],
   root: path.resolve(__dirname),
   resolve: {
-    dedupe: ['react', 'react-dom'],
+    dedupe: ['react', 'react-dom', 'zustand'],
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'zustand', 'zustand/middleware'],
   },
   build: {
     rollupOptions: {

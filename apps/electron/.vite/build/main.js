@@ -15558,21 +15558,49 @@ require$$1$3.app.whenReady().then(() => {
       }
     });
   }
-  const contextMenu = require$$1$3.Menu.buildFromTemplate([
-    {
-      label: "Toggle Navi",
-      accelerator: isMac ? "Cmd+`" : "Alt+`",
-      click: toggleFlow
-    },
-    {
-      label: "Settings",
-      accelerator: isMac ? "Cmd+." : "Alt+.",
-      click: toggleSettings
-    },
-    { type: "separator" },
-    { label: "Quit", click: () => require$$1$3.app.quit() }
-  ]);
-  tray.setContextMenu(contextMenu);
+  if (require$$1$3.app.isPackaged) {
+    const loginSettings = require$$1$3.app.getLoginItemSettings();
+    if (!loginSettings.wasOpenedAtLogin) {
+      require$$1$3.app.setLoginItemSettings({
+        openAtLogin: true,
+        openAsHidden: true
+        // Start hidden (as tray app)
+      });
+    }
+  }
+  function buildTrayMenu() {
+    const loginSettings = require$$1$3.app.getLoginItemSettings();
+    return require$$1$3.Menu.buildFromTemplate([
+      {
+        label: "Toggle Navi",
+        accelerator: isMac ? "Cmd+`" : "Alt+`",
+        click: toggleFlow
+      },
+      {
+        label: "Settings",
+        accelerator: isMac ? "Cmd+." : "Alt+.",
+        click: toggleSettings
+      },
+      { type: "separator" },
+      {
+        label: "Launch at Startup",
+        type: "checkbox",
+        checked: loginSettings.openAtLogin,
+        click: (menuItem) => {
+          require$$1$3.app.setLoginItemSettings({
+            openAtLogin: menuItem.checked,
+            openAsHidden: true
+          });
+          if (tray) {
+            tray.setContextMenu(buildTrayMenu());
+          }
+        }
+      },
+      { type: "separator" },
+      { label: "Quit", click: () => require$$1$3.app.quit() }
+    ]);
+  }
+  tray.setContextMenu(buildTrayMenu());
   tray.on("click", toggleFlow);
   require$$1$3.globalShortcut.register(SHORTCUT, toggleFlow);
   require$$1$3.globalShortcut.register(SETTINGS_SHORTCUT, toggleSettings);

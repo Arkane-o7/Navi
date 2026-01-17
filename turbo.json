@@ -1,6 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "globalDependencies": [
+    ".npmrc",
+    "pnpm-lock.yaml"
+  ],
   "globalEnv": [
     "DATABASE_URL",
     "UPSTASH_REDIS_REST_URL",

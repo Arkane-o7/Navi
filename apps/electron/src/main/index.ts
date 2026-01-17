@@ -404,21 +404,54 @@ app.whenReady().then(() => {
     });
   }
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Toggle Navi',
-      accelerator: isMac ? 'Cmd+`' : 'Alt+`',
-      click: toggleFlow
-    },
-    {
-      label: 'Settings',
-      accelerator: isMac ? 'Cmd+.' : 'Alt+.',
-      click: toggleSettings
-    },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() }
-  ]);
-  tray.setContextMenu(contextMenu);
+  // Enable launch at startup by default (only in production)
+  if (app.isPackaged) {
+    const loginSettings = app.getLoginItemSettings();
+    if (!loginSettings.wasOpenedAtLogin) {
+      // First launch or fresh install - enable startup by default
+      app.setLoginItemSettings({
+        openAtLogin: true,
+        openAsHidden: true, // Start hidden (as tray app)
+      });
+    }
+  }
+
+  // Build tray context menu with launch at startup toggle
+  function buildTrayMenu() {
+    const loginSettings = app.getLoginItemSettings();
+    return Menu.buildFromTemplate([
+      {
+        label: 'Toggle Navi',
+        accelerator: isMac ? 'Cmd+`' : 'Alt+`',
+        click: toggleFlow
+      },
+      {
+        label: 'Settings',
+        accelerator: isMac ? 'Cmd+.' : 'Alt+.',
+        click: toggleSettings
+      },
+      { type: 'separator' },
+      {
+        label: 'Launch at Startup',
+        type: 'checkbox',
+        checked: loginSettings.openAtLogin,
+        click: (menuItem) => {
+          app.setLoginItemSettings({
+            openAtLogin: menuItem.checked,
+            openAsHidden: true,
+          });
+          // Rebuild menu to reflect updated state
+          if (tray) {
+            tray.setContextMenu(buildTrayMenu());
+          }
+        }
+      },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() }
+    ]);
+  }
+
+  tray.setContextMenu(buildTrayMenu());
 
   // Click on tray icon to toggle Navi
   tray.on('click', toggleFlow);

@@ -82,7 +82,7 @@ module.exports = {
           name: 'Navi',
         },
         prerelease: false,
-        draft: true, // Create as draft so you can review before publishing
+        draft: false, // Auto-publish releases
       },
     },
   ],

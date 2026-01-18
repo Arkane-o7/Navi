@@ -13,8 +13,25 @@ import {
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
 
-// Note: electron-squirrel-startup is only needed for Windows Squirrel installer
-// It's not bundled in production builds, so we skip it on non-Windows platforms
+// ─────────────────────────────────────────────────────────────
+// Windows Squirrel Installer Handling
+// MUST be at the very top before any other code runs
+// ─────────────────────────────────────────────────────────────
+if (process.platform === 'win32') {
+  // Handle Squirrel events for Windows installer
+  // This handles: --squirrel-install, --squirrel-updated, --squirrel-uninstall, --squirrel-obsolete
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const started = require('electron-squirrel-startup');
+    if (started) {
+      // Squirrel event handled, quit immediately
+      app.quit();
+    }
+  } catch (e) {
+    // electron-squirrel-startup not available (e.g., in dev mode)
+    // This is expected and safe to ignore
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Deep Link Protocol (navi://)
@@ -368,6 +385,8 @@ ipcMain.on('auth:logout', () => {
 // App Lifecycle
 // ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
+  console.log('[Navi] App ready, initializing...');
+
   // Hide from dock on macOS (show only in menu bar)
   if (isMac) {
     app.dock.hide();
@@ -381,25 +400,51 @@ app.whenReady().then(() => {
       ? path.join(process.resourcesPath, 'assets')
       : path.join(__dirname, '../../assets');
 
+    console.log('[Navi] Assets path:', assetsPath);
+
     if (isMac) {
       // macOS: Template icons auto-adapt to light/dark menu bar
       return path.join(assetsPath, 'trayIconTemplate.png');
     } else {
       // Windows/Linux: Use light icon on dark theme, dark icon on light theme
       const iconName = nativeTheme.shouldUseDarkColors ? 'trayIcon-light.png' : 'trayIcon-dark.png';
-      return path.join(assetsPath, iconName);
+      const iconPath = path.join(assetsPath, iconName);
+      console.log('[Navi] Tray icon path:', iconPath);
+      return iconPath;
     }
   }
 
-  // Create tray icon
-  tray = new Tray(getTrayIconPath());
-  tray.setToolTip('Navi');
+  // Create tray icon with error handling
+  try {
+    const trayIconPath = getTrayIconPath();
+    console.log('[Navi] Creating tray with icon:', trayIconPath);
+    tray = new Tray(trayIconPath);
+    tray.setToolTip('Navi - Press Alt+` to show');
+    console.log('[Navi] Tray created successfully');
+
+    // Show a balloon notification on first launch (Windows only)
+    if (process.platform === 'win32' && app.isPackaged) {
+      tray.displayBalloon({
+        iconType: 'info',
+        title: 'Navi is running!',
+        content: 'Press Alt+` to open Navi. Right-click this icon for options.',
+      });
+    }
+  } catch (error) {
+    console.error('[Navi] Failed to create tray:', error);
+    // If tray fails, show an error dialog
+    dialog.showErrorBox('Navi Error', `Failed to create system tray icon: ${error}`);
+  }
 
   // Update tray icon when system theme changes (Windows/Linux)
-  if (!isMac) {
+  if (!isMac && tray) {
     nativeTheme.on('updated', () => {
       if (tray) {
-        tray.setImage(getTrayIconPath());
+        try {
+          tray.setImage(getTrayIconPath());
+        } catch (error) {
+          console.error('[Navi] Failed to update tray icon:', error);
+        }
       }
     });
   }
@@ -451,19 +496,23 @@ app.whenReady().then(() => {
     ]);
   }
 
-  tray.setContextMenu(buildTrayMenu());
-
-  // Click on tray icon to toggle Navi
-  tray.on('click', toggleFlow);
+  if (tray) {
+    tray.setContextMenu(buildTrayMenu());
+    // Click on tray icon to toggle Navi
+    tray.on('click', toggleFlow);
+  }
 
   globalShortcut.register(SHORTCUT, toggleFlow);
   globalShortcut.register(SETTINGS_SHORTCUT, toggleSettings);
   flowWindow = createFlowWindow();
+  console.log('[Navi] Flow window created');
 
   // Setup auto-updater (only in production builds)
   if (!MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     setupAutoUpdater();
   }
+
+  console.log('[Navi] Initialization complete. Press Alt+` to show.');
 });
 
 app.on('will-quit', () => globalShortcut.unregisterAll());

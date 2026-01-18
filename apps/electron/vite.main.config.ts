@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { builtinModules } from 'module';
 
 export default defineConfig({
   build: {
@@ -8,7 +9,13 @@ export default defineConfig({
       fileName: () => 'main.js',
     },
     rollupOptions: {
-      external: ['electron'],
+      external: [
+        'electron',
+        'electron-squirrel-startup',
+        // Externalize all Node.js built-in modules
+        ...builtinModules,
+        ...builtinModules.map((m) => `node:${m}`),
+      ],
     },
   },
 });

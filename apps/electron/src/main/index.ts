@@ -221,37 +221,143 @@ function toggleSettings(): void {
 // ─────────────────────────────────────────────────────────────
 // Show / Hide / Toggle
 // ─────────────────────────────────────────────────────────────
+
+// Track which display the window was last shown on
+let lastDisplayId: number | null = null;
+// Track visibility state (for opacity-based approach on Windows)
+let isFlowVisible = false;
+// Animation state
+let opacityAnimationTimer: NodeJS.Timeout | null = null;
+
+// Smooth opacity animation for Windows
+function animateOpacity(targetOpacity: number, duration: number = 120): Promise<void> {
+  return new Promise((resolve) => {
+    if (!flowWindow) {
+      resolve();
+      return;
+    }
+
+    // Clear any existing animation
+    if (opacityAnimationTimer) {
+      clearInterval(opacityAnimationTimer);
+      opacityAnimationTimer = null;
+    }
+
+    const startOpacity = flowWindow.getOpacity();
+    const startTime = Date.now();
+    const diff = targetOpacity - startOpacity;
+
+    // If already at target, resolve immediately
+    if (Math.abs(diff) < 0.01) {
+      flowWindow.setOpacity(targetOpacity);
+      resolve();
+      return;
+    }
+
+    const step = () => {
+      if (!flowWindow) {
+        if (opacityAnimationTimer) clearInterval(opacityAnimationTimer);
+        opacityAnimationTimer = null;
+        resolve();
+        return;
+      }
+
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Ease out cubic for smooth deceleration
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const currentOpacity = startOpacity + (diff * eased);
+
+      flowWindow.setOpacity(currentOpacity);
+
+      if (progress >= 1) {
+        if (opacityAnimationTimer) clearInterval(opacityAnimationTimer);
+        opacityAnimationTimer = null;
+        flowWindow.setOpacity(targetOpacity); // Ensure exact final value
+        resolve();
+      }
+    };
+
+    // Run at ~60fps
+    opacityAnimationTimer = setInterval(step, 16);
+    step(); // Run immediately
+  });
+}
+
 function showFlow(): void {
   if (!flowWindow) return;
+
+  // Already visible, do nothing
+  if (isFlowVisible) return;
 
   const cursor = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursor);
 
-  flowWindow.setBounds({
-    x: display.workArea.x,
-    y: display.workArea.y,
-    width: display.workArea.width,
-    height: display.workArea.height,
-  });
+  // Only reposition if we're on a different display than before
+  const needsReposition = lastDisplayId !== display.id;
 
-  flowWindow.show();
+  if (needsReposition) {
+    lastDisplayId = display.id;
+    flowWindow.setBounds({
+      x: display.workArea.x,
+      y: display.workArea.y,
+      width: display.workArea.width,
+      height: display.workArea.height,
+    });
+  }
+
+  isFlowVisible = true;
+
+  // On Windows, use animated opacity to avoid transparent window show/hide stutter
+  if (process.platform === 'win32') {
+    // Ensure window is shown (it should be, but just in case)
+    if (!flowWindow.isVisible()) {
+      flowWindow.setOpacity(0);
+      flowWindow.show();
+    }
+    // Animate opacity for smooth appearance
+    animateOpacity(1, 120);
+  } else {
+    flowWindow.show();
+  }
+
   flowWindow.focus();
   flowWindow.webContents.send('flow:show');
 }
 
 function hideFlow(): void {
-  if (!flowWindow?.isVisible()) return;
-  flowWindow.hide();
+  if (!flowWindow || !isFlowVisible) return;
+
+  isFlowVisible = false;
   flowWindow.webContents.send('flow:hide');
+
+  // On Windows, use animated opacity to avoid transparent window hide stutter
+  if (process.platform === 'win32') {
+    // Animate opacity for smooth disappearance
+    animateOpacity(0, 100).then(() => {
+      // Blur after animation completes
+      if (flowWindow) {
+        flowWindow.blur();
+      }
+    });
+  } else {
+    flowWindow.hide();
+  }
 }
 
 function toggleFlow(): void {
   if (!flowWindow) {
     flowWindow = createFlowWindow();
+    // On Windows, show the window initially with 0 opacity
+    if (process.platform === 'win32') {
+      flowWindow.setOpacity(0);
+      flowWindow.showInactive();
+    }
     flowWindow.once('ready-to-show', showFlow);
     return;
   }
-  flowWindow.isVisible() ? hideFlow() : showFlow();
+  isFlowVisible ? hideFlow() : showFlow();
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const { theme, model, setTheme, setModel } = useSettingsStore();
+  const { theme, dockBehavior, model, setTheme, setDockBehavior, setModel } = useSettingsStore();
   const { user, subscription, isAuthenticated, setUser, setTokens, logout, syncUser } = useAuthStore();
 
   // Apply theme to settings window
@@ -106,6 +106,27 @@ export default function Settings() {
       unsubLogout();
     };
   }, [setTokens, setUser, logout]);
+
+  // Listen for dock behavior changes from other windows
+  useEffect(() => {
+    if (!window.navi?.onDockBehaviorChange) return;
+
+    const { setDockBehavior } = useSettingsStore.getState();
+
+    const unsubscribe = window.navi.onDockBehaviorChange((behavior) => {
+      console.log('[Settings] Dock behavior changed via IPC:', behavior);
+      setDockBehavior(behavior);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Sync current dock behavior to main process on mount
+  useEffect(() => {
+    if (!window.navi?.setDockBehavior) return;
+    console.log('[Settings] Syncing dock behavior to main:', dockBehavior);
+    window.navi.setDockBehavior(dockBehavior);
+  }, []);
 
   const handleLogin = () => {
     setAuthError(null);
@@ -268,6 +289,32 @@ export default function Settings() {
                         {t.name}
                       </option>
                     ))}
+                  </select>
+                </div>
+              </section>
+
+              {/* Docking Section */}
+              <section className="settings-section">
+                <h3>Docking</h3>
+                <div className="settings-item">
+                  <div className="settings-item-info">
+                    <span className="settings-item-label">Dock behavior</span>
+                    <span className="settings-item-description">
+                      Choose which side Navi docks to by default
+                    </span>
+                  </div>
+                  <select
+                    className="settings-select"
+                    value={dockBehavior}
+                    onChange={(e) => {
+                      const behavior = e.target.value as 'right' | 'left';
+                      setDockBehavior(behavior);
+                      console.log('[Settings] Dock behavior changed (UI):', behavior);
+                      window.navi?.setDockBehavior(behavior);
+                    }}
+                  >
+                    <option value="right">Dock right (default)</option>
+                    <option value="left">Dock left</option>
                   </select>
                 </div>
               </section>

@@ -16,17 +16,23 @@ const PANEL_WIDTH = 640;
 const PANEL_MIN_HEIGHT = 54; // Input only
 const PANEL_MAX_HEIGHT = 480; // Max expanded height
 const PANEL_TOP_OFFSET = 120; // Distance from top of screen
+const DOCK_WIDTH = 420;
+const DOCK_PADDING = 12;
 
 // Platform detection for keyboard shortcuts
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 const MOD_KEY = isMac ? '⌘' : 'Alt';
 const MOD_SYMBOL = isMac ? '⌘' : 'Alt+';
 
+// Detect if launched in docked mode via URL query param
+const IS_DOCKED = new URLSearchParams(window.location.search).get('docked') === 'true';
+
 export default function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [isDocked, setIsDocked] = useState(IS_DOCKED);
 
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
@@ -51,8 +57,8 @@ export default function App() {
   const conversation = getActiveConversation();
   const messages = conversation?.messages ?? [];
 
-  // Get theme from settings
-  const { theme } = useSettingsStore();
+  // Get theme + dock behavior from settings
+  const { theme, dockBehavior } = useSettingsStore();
   const { refreshAuth, syncUser } = useAuthStore();
 
   // Initialize auth and listen for auth callback from main process
@@ -137,16 +143,35 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // Listen for dock behavior changes from settings window via IPC
+  useEffect(() => {
+    if (!window.navi?.onDockBehaviorChange) return;
+
+    const { setDockBehavior } = useSettingsStore.getState();
+
+    const unsubscribe = window.navi.onDockBehaviorChange((behavior) => {
+      console.log('[App] Dock behavior changed via IPC:', behavior);
+      setDockBehavior(behavior);
+    });
+
+    return unsubscribe;
+  }, []);
+
+
   // ─────────────────────────────────────────────────────────────
   // Mouse Event Handlers for Click-Through Behavior
   // ─────────────────────────────────────────────────────────────
   const handleMouseEnter = useCallback(() => {
-    window.navi?.mouseEnter();
-  }, []);
+    if (!isDocked) {
+      window.navi?.mouseEnter();
+    }
+  }, [isDocked]);
 
   const handleMouseLeave = useCallback(() => {
-    window.navi?.mouseLeave();
-  }, []);
+    if (!isDocked) {
+      window.navi?.mouseLeave();
+    }
+  }, [isDocked]);
 
   // ─────────────────────────────────────────────────────────────
   // Drag Handlers for Panel Positioning
@@ -154,6 +179,8 @@ export default function App() {
   const DRAG_EDGE_SIZE = 12; // pixels from edge where dragging is allowed
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
+    if (isDocked) return;
+
     // Only drag if clicking on the panel edge (not content)
     const target = e.target as HTMLElement;
 
@@ -188,9 +215,10 @@ export default function App() {
       panelX: panelPosition.x,
       panelY: panelPosition.y,
     };
-  }, [panelPosition]);
+  }, [panelPosition, isDocked]);
 
   const handleDragMove = useCallback((e: React.MouseEvent) => {
+    if (isDocked) return;
     if (!isDragging) return;
 
     const deltaX = e.clientX - dragStartRef.current.x;
@@ -200,11 +228,23 @@ export default function App() {
       x: dragStartRef.current.panelX + deltaX,
       y: dragStartRef.current.panelY + deltaY,
     });
-  }, [isDragging]);
+  }, [isDragging, isDocked]);
 
   const handleDragEnd = useCallback(() => {
     setIsDragging(false);
   }, []);
+
+  const handleDockToggle = useCallback(() => {
+    if (isDocked) {
+      // Undock: tell main process, which will close this window and restore overlay
+      console.log('[App] Undock requested with side:', dockBehavior);
+      window.navi?.dock({ docked: false, side: dockBehavior, width: DOCK_WIDTH });
+    } else {
+      // Dock: tell main process, which will hide this overlay and create a new docked window
+      console.log('[App] Dock requested with side:', dockBehavior);
+      window.navi?.dock({ docked: true, side: dockBehavior, width: DOCK_WIDTH });
+    }
+  }, [isDocked, dockBehavior]);
 
   // ─────────────────────────────────────────────────────────────
   // Auto-scroll
@@ -234,7 +274,7 @@ export default function App() {
       // Platform-specific modifier key
       const modPressed = isMac ? e.metaKey : e.altKey;
 
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !isDocked) {
         window.navi?.hide();
       }
       if (modPressed && e.key === 'n') {
@@ -342,7 +382,7 @@ export default function App() {
 
   return (
     <div
-      className="overlay-container"
+      className={`overlay-container ${isDocked ? 'docked' : ''}`}
       onMouseMove={handleDragMove}
       onMouseUp={handleDragEnd}
       onMouseLeave={handleDragEnd}
@@ -355,10 +395,11 @@ export default function App() {
         onMouseLeave={handleMouseLeave}
         onMouseDown={handleDragStart}
         style={{
-          width: PANEL_WIDTH,
-          maxHeight: PANEL_MAX_HEIGHT,
-          transform: `translate(${panelPosition.x}px, ${panelPosition.y}px)`,
-          cursor: isDragging ? 'grabbing' : undefined,
+          width: isDocked ? '100%' : PANEL_WIDTH,
+          maxHeight: isDocked ? '100%' : PANEL_MAX_HEIGHT,
+          height: isDocked ? '100%' : undefined,
+          transform: isDocked ? 'none' : `translate(${panelPosition.x}px, ${panelPosition.y}px)`,
+          cursor: !isDocked && isDragging ? 'grabbing' : undefined,
         }}
       >
         {/* Messages */}
@@ -420,9 +461,32 @@ export default function App() {
                 <span>Settings</span>
               </div>
             </div>
-            <div className="shortcut">
-              <span className="key">esc</span>
-              <span>Close</span>
+            <div className="footer-actions">
+              <button
+                className={`dock-toggle ${isDocked ? 'active' : ''}`}
+                onClick={handleDockToggle}
+                type="button"
+                title={isDocked ? 'Undock window' : 'Dock window'}
+              >
+                <span className="dock-icon" aria-hidden="true">
+                  {isDocked ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 4h16v16H4z" />
+                      <path d="M9 9h6v6H9z" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 4h16v16H4z" />
+                      <path d="M15 4v16" />
+                    </svg>
+                  )}
+                </span>
+                <span className="dock-label">{isDocked ? 'Undock' : 'Dock'}</span>
+              </button>
+              <div className="shortcut">
+                <span className="key">esc</span>
+                <span>Close</span>
+              </div>
             </div>
           </div>
         )}

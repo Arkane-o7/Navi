@@ -6,12 +6,14 @@ import {
   ipcMain,
   shell,
   nativeTheme,
+  nativeImage,
   Tray,
   Menu,
   dialog,
 } from 'electron';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
+import { execFile } from 'child_process';
 
 // ─────────────────────────────────────────────────────────────
 // Windows Squirrel Installer Handling
@@ -52,14 +54,92 @@ const isMac = process.platform === 'darwin';
 const SHORTCUT = isMac ? 'Command+`' : 'Alt+`';
 const SETTINGS_SHORTCUT = isMac ? 'Command+.' : 'Alt+.';
 
+// Set app name (overrides "Electron" in dev mode)
+app.setName('Navi');
+
+/** Resolve the Navi icon path (works in both dev and packaged mode). */
+function getNaviIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'assets', 'icon.png')
+    : path.join(__dirname, '../../assets/icon.png');
+}
+
+/** Show the macOS dock and override its icon with Navi's icon. */
+async function showDockWithNaviIcon(): Promise<void> {
+  if (!isMac) return;
+  // Show dock first, THEN override the icon — setIcon before show is ignored.
+  await app.dock.show();
+  try {
+    const icon = nativeImage.createFromPath(getNaviIconPath());
+    if (!icon.isEmpty()) {
+      app.dock.setIcon(icon);
+      console.log('[Navi] Dock icon set successfully');
+    } else {
+      console.error('[Navi] Dock icon image is empty');
+    }
+  } catch (err) {
+    console.error('[Navi] Failed to set dock icon:', err);
+  }
+}
+
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
 declare const SETTINGS_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const SETTINGS_WINDOW_VITE_NAME: string;
 
 let flowWindow: BrowserWindow | null = null;
+let dockedWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let isDocked = false;
+let dockSide: 'left' | 'right' | 'top' | 'bottom' = 'right';
+let dockedSize = { width: 420, height: 0 };
+// Guard: suppress blur-hide during dock/undock transitions
+let dockTransitionUntil = 0;
+
+// ─────────────────────────────────────────────────────────────
+// macOS Window Tiling via AppleScript
+// ─────────────────────────────────────────────────────────────
+function tileOtherWindows(remainingBounds: { x: number; y: number; width: number; height: number }): void {
+  if (!isMac) return;
+
+  const { x, y, width, height } = remainingBounds;
+
+  // AppleScript to move/resize all visible windows of other apps into the remaining space
+  const script = `
+    tell application "System Events"
+      set allProcs to every process whose visible is true and name is not "Navi" and name is not "Electron"
+      repeat with proc in allProcs
+        try
+          set procName to name of proc
+          -- Skip menu bar apps and system processes
+          if (count of windows of proc) > 0 then
+            tell application procName
+              repeat with win in every window
+                try
+                  set bounds of win to {${x}, ${y}, ${x + width}, ${y + height}}
+                end try
+              end repeat
+            end tell
+          end if
+        end try
+      end repeat
+    end tell
+  `;
+
+  execFile('osascript', ['-e', script], (err) => {
+    if (err) {
+      console.error('[Navi] Failed to tile other windows:', err.message);
+    } else {
+      console.log('[Navi] Tiled other windows to remaining space');
+    }
+  });
+}
+
+function restoreOtherWindows(fullBounds: { x: number; y: number; width: number; height: number }): void {
+  if (!isMac) return;
+  tileOtherWindows(fullBounds);
+}
 
 // ─────────────────────────────────────────────────────────────
 // Auto-Update Setup
@@ -150,10 +230,69 @@ function createFlowWindow(): BrowserWindow {
 
   win.on('blur', () => {
     setTimeout(() => {
-      if (flowWindow && !flowWindow.isFocused()) {
-        hideFlow();
-      }
+      if (!flowWindow || flowWindow.isDestroyed()) return;
+      // Don't hide if: window refocused, docked, just shown (<300ms ago), or in dock transition
+      if (flowWindow.isFocused()) return;
+      if (isDocked) return;
+      if (Date.now() - showTimestamp < 300) return;
+      if (Date.now() < dockTransitionUntil) return;
+      console.log('[Navi] Blur handler: hiding flow');
+      hideFlow();
     }, 100);
+  });
+
+  win.on('show', () => {
+    isFlowVisible = true;
+  });
+
+  win.on('hide', () => {
+    isFlowVisible = false;
+  });
+
+  return win;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Docked Window Creation - Solid, Non-Transparent Window
+// ─────────────────────────────────────────────────────────────
+function createDockedWindow(bounds: { x: number; y: number; width: number; height: number }): BrowserWindow {
+  const win = new BrowserWindow({
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
+    frame: false,
+    transparent: false,
+    backgroundColor: '#1c1c1e',
+    hasShadow: true,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    resizable: false,
+    movable: false,
+    show: false,
+    focusable: true,
+    title: 'Navi',
+    titleBarStyle: 'hidden',
+    webPreferences: {
+      preload: path.join(__dirname, 'index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  // Load the same renderer but with a query param so it knows it's docked
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    win.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}?docked=true`);
+  } else {
+    win.loadFile(
+      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+      { query: { docked: 'true' } }
+    );
+  }
+
+  win.on('closed', () => {
+    dockedWindow = null;
   });
 
   return win;
@@ -226,6 +365,8 @@ function toggleSettings(): void {
 let lastDisplayId: number | null = null;
 // Track visibility state (for opacity-based approach on Windows)
 let isFlowVisible = false;
+// Guard against blur firing right after show
+let showTimestamp = 0;
 // Animation state
 let opacityAnimationTimer: NodeJS.Timeout | null = null;
 
@@ -286,28 +427,28 @@ function animateOpacity(targetOpacity: number, duration: number = 120): Promise<
 }
 
 function showFlow(): void {
-  if (!flowWindow) return;
-
-  // Already visible, do nothing
-  if (isFlowVisible) return;
+  if (!flowWindow || flowWindow.isDestroyed()) return;
 
   const cursor = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursor);
 
-  // Only reposition if we're on a different display than before
-  const needsReposition = lastDisplayId !== display.id;
+  if (!isDocked) {
+    // Only reposition if we're on a different display than before
+    const needsReposition = lastDisplayId !== display.id;
 
-  if (needsReposition) {
-    lastDisplayId = display.id;
-    flowWindow.setBounds({
-      x: display.workArea.x,
-      y: display.workArea.y,
-      width: display.workArea.width,
-      height: display.workArea.height,
-    });
+    if (needsReposition) {
+      lastDisplayId = display.id;
+      flowWindow.setBounds({
+        x: display.workArea.x,
+        y: display.workArea.y,
+        width: display.workArea.width,
+        height: display.workArea.height,
+      });
+    }
   }
 
   isFlowVisible = true;
+  showTimestamp = Date.now();
 
   // On Windows, use animated opacity to avoid transparent window show/hide stutter
   if (process.platform === 'win32') {
@@ -319,6 +460,8 @@ function showFlow(): void {
     // Animate opacity for smooth appearance
     animateOpacity(1, 120);
   } else {
+    // Re-assert alwaysOnTop level (macOS can reset it during dock mode changes)
+    flowWindow.setAlwaysOnTop(true, 'floating');
     flowWindow.show();
   }
 
@@ -327,7 +470,10 @@ function showFlow(): void {
 }
 
 function hideFlow(): void {
-  if (!flowWindow || !isFlowVisible) return;
+  if (!flowWindow || flowWindow.isDestroyed()) return;
+  // Never hide while docked or during dock transition
+  if (isDocked) return;
+  if (Date.now() < dockTransitionUntil) return;
 
   isFlowVisible = false;
   flowWindow.webContents.send('flow:hide');
@@ -347,6 +493,17 @@ function hideFlow(): void {
 }
 
 function toggleFlow(): void {
+  // When docked, just focus the docked window
+  if (isDocked && dockedWindow && !dockedWindow.isDestroyed()) {
+    if (dockedWindow.isVisible()) {
+      dockedWindow.focus();
+    } else {
+      dockedWindow.show();
+      dockedWindow.focus();
+    }
+    return;
+  }
+
   if (!flowWindow) {
     flowWindow = createFlowWindow();
     // On Windows, show the window initially with 0 opacity
@@ -360,19 +517,160 @@ function toggleFlow(): void {
   isFlowVisible ? hideFlow() : showFlow();
 }
 
+async function dockFlowWindow(payload: { docked: boolean; side?: 'left' | 'right' | 'top' | 'bottom'; width?: number; height?: number }): Promise<void> {
+  const docked = payload.docked;
+  const side = payload.side ?? dockSide;
+  const width = payload.width ?? dockedSize.width;
+  const height = payload.height ?? dockedSize.height;
+
+  const cursor = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursor);
+  const { x, y, width: displayWidth, height: displayHeight } = display.workArea;
+
+  dockSide = side;
+  dockedSize = { width, height };
+
+  console.log('[Navi] Dock request:', {
+    docked,
+    payloadSide: payload.side,
+    effectiveSide: side,
+    storedDockSide: dockSide,
+  });
+
+  if (!docked) {
+    // ── Undock: close docked window, restore overlay ──
+    console.log('[Navi] Undocking...');
+    isDocked = false;
+
+    // Suppress blur-hide for the entire transition
+    dockTransitionUntil = Date.now() + 3000;
+
+    // 1. Close the docked window first
+    if (dockedWindow && !dockedWindow.isDestroyed()) {
+      dockedWindow.close();
+      dockedWindow = null;
+    }
+
+    // 2. Restore other windows to full screen
+    restoreOtherWindows({ x, y, width: displayWidth, height: displayHeight });
+
+    // 3. Hide dock icon BEFORE showing overlay (synchronous).
+    //    This puts the app back into agent mode while no windows are visible,
+    //    avoiding the race where dock.hide() defocuses a visible window.
+    if (isMac) {
+      app.dock.hide();
+      console.log('[Navi] Dock icon hidden (before showing overlay)');
+    }
+
+    // 4. Small delay for macOS to settle into agent mode, then show overlay
+    setTimeout(() => {
+      if (!flowWindow || flowWindow.isDestroyed()) {
+        // Recreate if destroyed
+        flowWindow = createFlowWindow();
+        flowWindow.once('ready-to-show', () => {
+          showFlow();
+          console.log('[Navi] Flow recreated and shown after undock');
+        });
+        return;
+      }
+
+      // Reset click-through to initial overlay state
+      flowWindow.setIgnoreMouseEvents(true, { forward: true });
+      flowWindow.setBounds({ x, y, width: displayWidth, height: displayHeight });
+      // Re-assert alwaysOnTop with explicit level after dock mode change
+      flowWindow.setAlwaysOnTop(true, 'floating');
+      showFlow();
+      console.log('[Navi] Flow shown after undock');
+    }, 250);
+
+    return;
+  }
+
+  // ── Dock: hide overlay, create solid docked window ──
+  isDocked = true;
+  const dockWidth = Math.min(Math.max(width, 320), displayWidth);
+  const dockHeight = Math.min(Math.max(height || displayHeight, 200), displayHeight);
+
+  let bounds = { x, y, width: dockWidth, height: dockHeight };
+
+  if (side === 'right') {
+    bounds.x = x + displayWidth - dockWidth;
+  } else if (side === 'left') {
+    bounds.x = x;
+  } else if (side === 'top') {
+    bounds.y = y;
+    bounds.width = displayWidth;
+  } else if (side === 'bottom') {
+    bounds.y = y + displayHeight - dockHeight;
+    bounds.width = displayWidth;
+  }
+
+  // Hide the transparent overlay
+  if (flowWindow && !flowWindow.isDestroyed()) {
+    flowWindow.hide();
+    isFlowVisible = false;
+  }
+
+  // Show dock icon so macOS treats this as a real app
+  await showDockWithNaviIcon();
+
+  // Create or reposition docked window
+  if (dockedWindow && !dockedWindow.isDestroyed()) {
+    dockedWindow.setBounds(bounds);
+  } else {
+    dockedWindow = createDockedWindow(bounds);
+  }
+
+  dockedWindow.once('ready-to-show', () => {
+    if (dockedWindow) {
+      dockedWindow.show();
+      dockedWindow.focus();
+    }
+
+    // Tile other windows to fill remaining space
+    if (side === 'right') {
+      tileOtherWindows({ x, y, width: displayWidth - dockWidth, height: displayHeight });
+    } else if (side === 'left') {
+      tileOtherWindows({ x: x + dockWidth, y, width: displayWidth - dockWidth, height: displayHeight });
+    } else if (side === 'top') {
+      tileOtherWindows({ x, y: y + dockHeight, width: displayWidth, height: displayHeight - dockHeight });
+    } else if (side === 'bottom') {
+      tileOtherWindows({ x, y, width: displayWidth, height: displayHeight - dockHeight });
+    }
+  });
+
+  // If already ready, show immediately
+  if (dockedWindow.isVisible()) {
+    dockedWindow.focus();
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // IPC Handlers
 // ─────────────────────────────────────────────────────────────
 ipcMain.on('flow:hide', hideFlow);
 
 ipcMain.on('flow:mouseEnter', () => {
-  if (!flowWindow) return;
-  flowWindow.setIgnoreMouseEvents(false);
+  if (!flowWindow || flowWindow.isDestroyed()) return;
+  if (!isDocked) {
+    flowWindow.setIgnoreMouseEvents(false);
+  }
 });
 
 ipcMain.on('flow:mouseLeave', () => {
-  if (!flowWindow) return;
-  flowWindow.setIgnoreMouseEvents(true, { forward: true });
+  if (!flowWindow || flowWindow.isDestroyed()) return;
+  if (!isDocked) {
+    flowWindow.setIgnoreMouseEvents(true, { forward: true });
+  }
+});
+
+ipcMain.handle('flow:dock', async (_event, payload: { docked: boolean; side?: 'left' | 'right' | 'top' | 'bottom'; width?: number; height?: number }) => {
+  try {
+    await dockFlowWindow(payload);
+  } catch (err) {
+    console.error('[Navi] Dock handler error:', err);
+  }
+  return { docked: isDocked, side: dockSide };
 });
 
 ipcMain.on('shell:openExternal', (_e, url: string) => {
@@ -387,8 +685,25 @@ ipcMain.on('settings:setTheme', (_e, theme: string) => {
   if (flowWindow) {
     flowWindow.webContents.send('settings:themeChanged', theme);
   }
+  if (dockedWindow) {
+    dockedWindow.webContents.send('settings:themeChanged', theme);
+  }
   if (settingsWindow) {
     settingsWindow.webContents.send('settings:themeChanged', theme);
+  }
+});
+
+// Settings sync - broadcast dock behavior changes to all windows
+ipcMain.on('settings:setDockBehavior', (_e, behavior: 'right' | 'left') => {
+  dockSide = behavior;
+  if (flowWindow) {
+    flowWindow.webContents.send('settings:dockBehaviorChanged', behavior);
+  }
+  if (dockedWindow) {
+    dockedWindow.webContents.send('settings:dockBehaviorChanged', behavior);
+  }
+  if (settingsWindow) {
+    settingsWindow.webContents.send('settings:dockBehaviorChanged', behavior);
   }
 });
 
@@ -418,6 +733,9 @@ function handleDeepLink(url: string) {
           const authData = { accessToken, refreshToken, userId };
           if (flowWindow) {
             flowWindow.webContents.send('auth:callback', authData);
+          }
+          if (dockedWindow) {
+            dockedWindow.webContents.send('auth:callback', authData);
           }
           if (settingsWindow) {
             settingsWindow.webContents.send('auth:callback', authData);
@@ -481,6 +799,9 @@ ipcMain.on('auth:logout', () => {
   // Broadcast logout to all windows
   if (flowWindow) {
     flowWindow.webContents.send('auth:logout');
+  }
+  if (dockedWindow) {
+    dockedWindow.webContents.send('auth:logout');
   }
   if (settingsWindow) {
     settingsWindow.webContents.send('auth:logout');

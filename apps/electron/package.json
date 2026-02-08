@@ -1,5 +1,6 @@
 {
   "name": "@navi/electron",
+  "productName": "Navi",
   "version": "0.1.10",
   "private": true,
   "description": "Navi - Spotlight-style LLM desktop app",

@@ -17,6 +17,7 @@ declare global {
       // Window controls
       hide: () => void;
       resize: (height: number) => void;
+      dock: (payload: { docked: boolean; side?: 'left' | 'right' | 'top' | 'bottom'; width?: number; height?: number }) => Promise<{ docked: boolean; side: 'left' | 'right' | 'top' | 'bottom' }>;
       mouseEnter: () => void;
       mouseLeave: () => void;
 
@@ -27,6 +28,10 @@ declare global {
       getTheme: () => Promise<boolean>;
       setTheme: (theme: string) => void;
       onThemeChange: (callback: (theme: string) => void) => () => void;
+
+      // Dock behavior
+      setDockBehavior: (behavior: 'right' | 'left') => void;
+      onDockBehaviorChange: (callback: (behavior: 'right' | 'left') => void) => () => void;
 
       // Auth
       login: () => void;

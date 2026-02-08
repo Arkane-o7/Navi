@@ -95,13 +95,14 @@ body {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
   text-align: left;
 }
 
 .sidebar-item:hover {
   background: var(--settings-item-hover);
   color: var(--settings-text);
+  transform: translateX(2px);
 }
 
 .sidebar-item.active {
@@ -111,6 +112,16 @@ body {
 
 .sidebar-item svg {
   flex-shrink: 0;
+  transition: transform 0.15s ease, color 0.15s ease;
+  color: currentColor;
+}
+
+.sidebar-item:hover svg {
+  transform: scale(1.05);
+}
+
+.sidebar-item.active svg {
+  transform: scale(1.08);
 }
 
 /* Main Content */

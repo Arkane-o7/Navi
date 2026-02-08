@@ -14,6 +14,8 @@ interface AuthErrorData {
 const api = {
   // Window controls
   hide: () => ipcRenderer.send('flow:hide'),
+  dock: (payload: { docked: boolean; side?: 'left' | 'right' | 'top' | 'bottom'; width?: number; height?: number }) =>
+    ipcRenderer.invoke('flow:dock', payload),
 
   // Mouse event forwarding for click-through behavior
   mouseEnter: () => ipcRenderer.send('flow:mouseEnter'),
@@ -31,6 +33,14 @@ const api = {
     const handler = (_event: Electron.IpcRendererEvent, theme: string) => callback(theme);
     ipcRenderer.on('settings:themeChanged', handler);
     return () => ipcRenderer.removeListener('settings:themeChanged', handler);
+  },
+
+  // Dock behavior sync
+  setDockBehavior: (behavior: 'right' | 'left') => ipcRenderer.send('settings:setDockBehavior', behavior),
+  onDockBehaviorChange: (callback: (behavior: 'right' | 'left') => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, behavior: 'right' | 'left') => callback(behavior);
+    ipcRenderer.on('settings:dockBehaviorChanged', handler);
+    return () => ipcRenderer.removeListener('settings:dockBehaviorChanged', handler);
   },
 
   // Auth

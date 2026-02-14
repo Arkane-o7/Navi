@@ -1,7 +1,7 @@
 {
   "name": "@navi/electron",
   "productName": "Navi",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": true,
   "description": "Navi - Spotlight-style LLM desktop app",
   "author": "Arkane-o7",
@@ -16,11 +16,11 @@
   },
   "dependencies": {
     "@navi/shared": "workspace:*",
-    "electron-updater": "^6.7.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
     "react-syntax-highlighter": "^15.6.1",
+    "update-electron-app": "^3.1.2",
     "zustand": "^5.0.2"
   },
   "devDependencies": {

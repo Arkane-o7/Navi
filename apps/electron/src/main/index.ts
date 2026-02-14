@@ -12,8 +12,9 @@ import {
   dialog,
 } from 'electron';
 import path from 'path';
-import { autoUpdater } from 'electron-updater';
+import { updateElectronApp, UpdateSourceType } from 'update-electron-app';
 import { execFile } from 'child_process';
+import { logger } from '../shared/logger';
 
 // ─────────────────────────────────────────────────────────────
 // Windows Squirrel Installer Handling
@@ -73,12 +74,12 @@ async function showDockWithNaviIcon(): Promise<void> {
     const icon = nativeImage.createFromPath(getNaviIconPath());
     if (!icon.isEmpty()) {
       app.dock.setIcon(icon);
-      console.log('[Navi] Dock icon set successfully');
+      logger.debug('[Navi] Dock icon set successfully');
     } else {
-      console.error('[Navi] Dock icon image is empty');
+      logger.error('[Navi] Dock icon image is empty');
     }
   } catch (err) {
-    console.error('[Navi] Failed to set dock icon:', err);
+    logger.error('[Navi] Failed to set dock icon:', err);
   }
 }
 
@@ -129,9 +130,9 @@ function tileOtherWindows(remainingBounds: { x: number; y: number; width: number
 
   execFile('osascript', ['-e', script], (err) => {
     if (err) {
-      console.error('[Navi] Failed to tile other windows:', err.message);
+      logger.error('[Navi] Failed to tile other windows:', err.message);
     } else {
-      console.log('[Navi] Tiled other windows to remaining space');
+      logger.debug('[Navi] Tiled other windows to remaining space');
     }
   });
 }
@@ -145,42 +146,26 @@ function restoreOtherWindows(fullBounds: { x: number; y: number; width: number; 
 // Auto-Update Setup
 // ─────────────────────────────────────────────────────────────
 function setupAutoUpdater() {
-  // Disable auto-download, we'll prompt the user first
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // update-electron-app is the recommended auto-update path for Electron Forge.
+  // This updater currently supports macOS and Windows.
+  if (process.platform !== 'darwin' && process.platform !== 'win32') {
+    return;
+  }
 
-  autoUpdater.on('update-available', (info) => {
-    dialog.showMessageBox({
-      type: 'info',
-      title: 'Update Available',
-      message: `A new version (${info.version}) is available. Would you like to download it now?`,
-      buttons: ['Download', 'Later'],
-    }).then((result) => {
-      if (result.response === 0) {
-        autoUpdater.downloadUpdate();
-      }
+  try {
+    updateElectronApp({
+      updateSource: {
+        type: UpdateSourceType.ElectronPublicUpdateService,
+        repo: 'Arkane-o7/Navi',
+      },
+      updateInterval: '10 minutes',
+      notifyUser: true,
     });
-  });
 
-  autoUpdater.on('update-downloaded', () => {
-    dialog.showMessageBox({
-      type: 'info',
-      title: 'Update Ready',
-      message: 'Update downloaded. The app will restart to install the update.',
-      buttons: ['Restart Now', 'Later'],
-    }).then((result) => {
-      if (result.response === 0) {
-        autoUpdater.quitAndInstall();
-      }
-    });
-  });
-
-  autoUpdater.on('error', (error) => {
-    console.error('Auto-update error:', error);
-  });
-
-  // Check for updates (silently, in background)
-  autoUpdater.checkForUpdates().catch(console.error);
+    logger.info('[Navi] Auto-updater initialized');
+  } catch (error) {
+    logger.error('[Navi] Auto-updater initialization failed:', error);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -236,7 +221,7 @@ function createFlowWindow(): BrowserWindow {
       if (isDocked) return;
       if (Date.now() - showTimestamp < 300) return;
       if (Date.now() < dockTransitionUntil) return;
-      console.log('[Navi] Blur handler: hiding flow');
+      logger.debug('[Navi] Blur handler: hiding flow');
       hideFlow();
     }, 100);
   });
@@ -323,8 +308,8 @@ function createSettingsWindow(): BrowserWindow {
     },
   });
 
-  console.log('[Settings] Dev URL:', SETTINGS_WINDOW_VITE_DEV_SERVER_URL);
-  console.log('[Settings] Vite Name:', SETTINGS_WINDOW_VITE_NAME);
+  logger.debug('[Settings] Dev URL:', SETTINGS_WINDOW_VITE_DEV_SERVER_URL);
+  logger.debug('[Settings] Vite Name:', SETTINGS_WINDOW_VITE_NAME);
 
   if (SETTINGS_WINDOW_VITE_DEV_SERVER_URL) {
     // Load settings.html explicitly for the settings window
@@ -530,7 +515,7 @@ async function dockFlowWindow(payload: { docked: boolean; side?: 'left' | 'right
   dockSide = side;
   dockedSize = { width, height };
 
-  console.log('[Navi] Dock request:', {
+  logger.debug('[Navi] Dock request:', {
     docked,
     payloadSide: payload.side,
     effectiveSide: side,
@@ -539,7 +524,7 @@ async function dockFlowWindow(payload: { docked: boolean; side?: 'left' | 'right
 
   if (!docked) {
     // ── Undock: close docked window, restore overlay ──
-    console.log('[Navi] Undocking...');
+    logger.debug('[Navi] Undocking...');
     isDocked = false;
 
     // Suppress blur-hide for the entire transition
@@ -559,7 +544,7 @@ async function dockFlowWindow(payload: { docked: boolean; side?: 'left' | 'right
     //    avoiding the race where dock.hide() defocuses a visible window.
     if (isMac) {
       app.dock.hide();
-      console.log('[Navi] Dock icon hidden (before showing overlay)');
+      logger.debug('[Navi] Dock icon hidden (before showing overlay)');
     }
 
     // 4. Small delay for macOS to settle into agent mode, then show overlay
@@ -569,7 +554,7 @@ async function dockFlowWindow(payload: { docked: boolean; side?: 'left' | 'right
         flowWindow = createFlowWindow();
         flowWindow.once('ready-to-show', () => {
           showFlow();
-          console.log('[Navi] Flow recreated and shown after undock');
+          logger.debug('[Navi] Flow recreated and shown after undock');
         });
         return;
       }
@@ -580,7 +565,7 @@ async function dockFlowWindow(payload: { docked: boolean; side?: 'left' | 'right
       // Re-assert alwaysOnTop with explicit level after dock mode change
       flowWindow.setAlwaysOnTop(true, 'floating');
       showFlow();
-      console.log('[Navi] Flow shown after undock');
+      logger.debug('[Navi] Flow shown after undock');
     }, 250);
 
     return;
@@ -668,7 +653,7 @@ ipcMain.handle('flow:dock', async (_event, payload: { docked: boolean; side?: 'l
   try {
     await dockFlowWindow(payload);
   } catch (err) {
-    console.error('[Navi] Dock handler error:', err);
+    logger.error('[Navi] Dock handler error:', err);
   }
   return { docked: isDocked, side: dockSide };
 });
@@ -713,7 +698,7 @@ ipcMain.on('settings:open', toggleSettings);
 // Auth - Deep Link Handling
 // ─────────────────────────────────────────────────────────────
 function handleDeepLink(url: string) {
-  console.log('[DeepLink] Received:', url);
+  logger.debug('[DeepLink] Received:', url);
 
   try {
     const parsed = new URL(url);
@@ -742,7 +727,7 @@ function handleDeepLink(url: string) {
             settingsWindow.show();
             settingsWindow.focus();
           }
-          console.log('[DeepLink] Auth successful for user:', userId);
+          logger.debug('[DeepLink] Auth successful for user:', userId);
         }
       } else if (route === 'error') {
         // Auth error
@@ -754,11 +739,11 @@ function handleDeepLink(url: string) {
           settingsWindow.show();
           settingsWindow.focus();
         }
-        console.error('[DeepLink] Auth error:', error, description);
+        logger.error('[DeepLink] Auth error:', error, description);
       }
     }
   } catch (err) {
-    console.error('[DeepLink] Failed to parse URL:', err);
+    logger.error('[DeepLink] Failed to parse URL:', err);
   }
 }
 
@@ -812,7 +797,7 @@ ipcMain.on('auth:logout', () => {
 // App Lifecycle
 // ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
-  console.log('[Navi] App ready, initializing...');
+  logger.debug('[Navi] App ready, initializing...');
 
   // Hide from dock on macOS (show only in menu bar)
   if (isMac) {
@@ -827,7 +812,7 @@ app.whenReady().then(() => {
       ? path.join(process.resourcesPath, 'assets')
       : path.join(__dirname, '../../assets');
 
-    console.log('[Navi] Assets path:', assetsPath);
+    logger.debug('[Navi] Assets path:', assetsPath);
 
     if (isMac) {
       // macOS: Template icons auto-adapt to light/dark menu bar
@@ -836,7 +821,7 @@ app.whenReady().then(() => {
       // Windows/Linux: Use light icon on dark theme, dark icon on light theme
       const iconName = nativeTheme.shouldUseDarkColors ? 'trayIcon-light.png' : 'trayIcon-dark.png';
       const iconPath = path.join(assetsPath, iconName);
-      console.log('[Navi] Tray icon path:', iconPath);
+      logger.debug('[Navi] Tray icon path:', iconPath);
       return iconPath;
     }
   }
@@ -844,10 +829,10 @@ app.whenReady().then(() => {
   // Create tray icon with error handling
   try {
     const trayIconPath = getTrayIconPath();
-    console.log('[Navi] Creating tray with icon:', trayIconPath);
+    logger.debug('[Navi] Creating tray with icon:', trayIconPath);
     tray = new Tray(trayIconPath);
     tray.setToolTip('Navi - Press Alt+` to show');
-    console.log('[Navi] Tray created successfully');
+    logger.debug('[Navi] Tray created successfully');
 
     // Show a balloon notification on first launch (Windows only)
     if (process.platform === 'win32' && app.isPackaged) {
@@ -858,7 +843,7 @@ app.whenReady().then(() => {
       });
     }
   } catch (error) {
-    console.error('[Navi] Failed to create tray:', error);
+    logger.error('[Navi] Failed to create tray:', error);
     // If tray fails, show an error dialog
     dialog.showErrorBox('Navi Error', `Failed to create system tray icon: ${error}`);
   }
@@ -870,7 +855,7 @@ app.whenReady().then(() => {
         try {
           tray.setImage(getTrayIconPath());
         } catch (error) {
-          console.error('[Navi] Failed to update tray icon:', error);
+          logger.error('[Navi] Failed to update tray icon:', error);
         }
       }
     });
@@ -932,14 +917,14 @@ app.whenReady().then(() => {
   globalShortcut.register(SHORTCUT, toggleFlow);
   globalShortcut.register(SETTINGS_SHORTCUT, toggleSettings);
   flowWindow = createFlowWindow();
-  console.log('[Navi] Flow window created');
+  logger.debug('[Navi] Flow window created');
 
   // Setup auto-updater (only in production builds)
   if (!MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     setupAutoUpdater();
   }
 
-  console.log('[Navi] Initialization complete. Press Alt+` to show.');
+  logger.debug('[Navi] Initialization complete. Press Alt+` to show.');
 });
 
 app.on('will-quit', () => globalShortcut.unregisterAll());

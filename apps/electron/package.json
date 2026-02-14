@@ -1,7 +1,7 @@
 {
   "name": "@navi/electron",
   "productName": "Navi",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "private": true,
   "description": "Navi - Spotlight-style LLM desktop app",
   "author": "Arkane-o7",

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { API_CONFIG } from '../config';
 import { useAuthStore } from './authStore';
+import { logger } from '../../shared/logger';
 
 export interface Message {
   id: string;
@@ -166,7 +167,7 @@ export const useChatStore = create<ChatState>()(
           fetch(`${API_CONFIG.baseUrl}/api/conversations?id=${id}`, {
             method: 'DELETE',
             headers: getAuthHeaders(),
-          }).catch(console.error);
+          }).catch((error) => logger.error('[ChatStore] Failed to delete conversation in cloud:', error));
         }
       },
 
@@ -188,7 +189,7 @@ export const useChatStore = create<ChatState>()(
             ),
           }));
         } catch (error) {
-          console.error('[ChatStore] Failed to sync conversation:', error);
+          logger.error('[ChatStore] Failed to sync conversation:', error);
         }
       },
 
@@ -219,7 +220,7 @@ export const useChatStore = create<ChatState>()(
             ),
           }));
         } catch (error) {
-          console.error('[ChatStore] Failed to sync message:', error);
+          logger.error('[ChatStore] Failed to sync message:', error);
         }
       },
 
@@ -309,7 +310,7 @@ export const useChatStore = create<ChatState>()(
 
           set({ conversations: mergedConversations, isSyncing: false });
         } catch (error) {
-          console.error('[ChatStore] Failed to fetch from cloud:', error);
+          logger.error('[ChatStore] Failed to fetch from cloud:', error);
           set({ isSyncing: false });
         }
       },

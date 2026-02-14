@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { getUserIdFromHeader } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 // POST /api/messages - Save a message to a conversation
 export async function POST(request: NextRequest) {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
             },
         });
     } catch (error) {
-        console.error('[Messages API] POST error:', error);
+        logger.error('[Messages API] POST error:', error);
         return NextResponse.json(
             { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to save message' } },
             { status: 500 }
@@ -123,7 +124,7 @@ export async function GET(request: NextRequest) {
             },
         });
     } catch (error) {
-        console.error('[Messages API] GET error:', error);
+        logger.error('[Messages API] GET error:', error);
         return NextResponse.json(
             { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch messages' } },
             { status: 500 }

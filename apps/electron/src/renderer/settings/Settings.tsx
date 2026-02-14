@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAuthStore } from '../stores/authStore';
+import { logger } from '../../shared/logger';
 
 type Tab = 'general' | 'cloud-sync' | 'advanced';
 
@@ -50,14 +51,14 @@ export default function Settings() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && isAuthenticated) {
-        console.log('[Settings] Window visible, syncing user data');
+        logger.debug('[Settings] Window visible, syncing user data');
         syncUser();
       }
     };
 
     const handleFocus = () => {
       if (isAuthenticated) {
-        console.log('[Settings] Window focused, syncing user data');
+        logger.debug('[Settings] Window focused, syncing user data');
         syncUser();
       }
     };
@@ -82,7 +83,7 @@ export default function Settings() {
     if (!window.navi) return;
 
     const unsubCallback = window.navi.onAuthCallback(async (data) => {
-      console.log('[Settings] Auth callback received:', data.userId);
+      logger.debug('[Settings] Auth callback received:', data.userId);
       setTokens(data.accessToken, data.refreshToken);
 
       // Fetch user info via store action
@@ -92,7 +93,7 @@ export default function Settings() {
     });
 
     const unsubError = window.navi.onAuthError((data) => {
-      console.error('[Settings] Auth error:', data);
+      logger.error('[Settings] Auth error:', data);
       setAuthError(data.description || data.error);
     });
 
@@ -114,7 +115,7 @@ export default function Settings() {
     const { setDockBehavior } = useSettingsStore.getState();
 
     const unsubscribe = window.navi.onDockBehaviorChange((behavior) => {
-      console.log('[Settings] Dock behavior changed via IPC:', behavior);
+      logger.debug('[Settings] Dock behavior changed via IPC:', behavior);
       setDockBehavior(behavior);
     });
 
@@ -124,7 +125,7 @@ export default function Settings() {
   // Sync current dock behavior to main process on mount
   useEffect(() => {
     if (!window.navi?.setDockBehavior) return;
-    console.log('[Settings] Syncing dock behavior to main:', dockBehavior);
+    logger.debug('[Settings] Syncing dock behavior to main:', dockBehavior);
     window.navi.setDockBehavior(dockBehavior);
   }, []);
 
@@ -309,7 +310,7 @@ export default function Settings() {
                     onChange={(e) => {
                       const behavior = e.target.value as 'right' | 'left';
                       setDockBehavior(behavior);
-                      console.log('[Settings] Dock behavior changed (UI):', behavior);
+                      logger.debug('[Settings] Dock behavior changed (UI):', behavior);
                       window.navi?.setDockBehavior(behavior);
                     }}
                   >

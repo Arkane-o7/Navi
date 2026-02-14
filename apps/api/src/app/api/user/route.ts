@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql, getSubscription } from '@/lib/db';
 import { getDailyMessageCount } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 
 // Helper to get user ID from auth header
 function getUserIdFromHeader(request: NextRequest): string | null {
@@ -27,14 +28,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log('[User API] Fetching user:', userId);
     const user = await sql`
       SELECT id, email, name, created_at, updated_at
       FROM users WHERE id = ${userId}
     ` as Array<{ id: string; email: string; name: string | null; created_at: string; updated_at: string }>;
 
     if (user.length === 0) {
-      console.log('[User API] User not found:', userId);
       return NextResponse.json(
         { success: false, error: { code: 'NOT_FOUND', message: 'User not found' } },
         { status: 404 }
@@ -46,7 +45,7 @@ export async function GET(request: NextRequest) {
     try {
       subscription = await getSubscription(userId);
     } catch (subError) {
-      console.error('[User API] Subscription fetch failed, using default:', subError);
+      logger.error('[User API] Subscription fetch failed, using default:', subError);
     }
 
     // Fetch daily message usage for free tier (with fallback)
@@ -55,11 +54,10 @@ export async function GET(request: NextRequest) {
       try {
         dailyMessagesUsed = await getDailyMessageCount(userId);
       } catch (redisError) {
-        console.error('[User API] Redis fetch failed, defaulting to 0:', redisError);
+        logger.error('[User API] Redis fetch failed, defaulting to 0:', redisError);
       }
     }
 
-    console.log('[User API] User fetched successfully:', user[0].email);
     return NextResponse.json({
       success: true,
       data: {
@@ -80,7 +78,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[User API] Failed to fetch user:', error);
+    logger.error('[User API] Failed to fetch user:', error);
     return NextResponse.json(
       { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch user' } },
       { status: 500 }

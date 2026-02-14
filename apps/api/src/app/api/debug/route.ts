@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Groq from 'groq-sdk';
+import { logger } from '@/lib/logger';
 
 export async function GET() {
   const envCheck = {
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       response: data.choices?.[0]?.message?.content,
     });
   } catch (error) {
-    console.error('Debug error:', error);
+    logger.error('Debug error:', error);
     return NextResponse.json({
       success: false,
       error: String(error),

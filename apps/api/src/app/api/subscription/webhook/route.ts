@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { sql, upsertSubscription } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 // Lazy init Stripe
 let stripe: Stripe | null = null;
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
-    console.error('STRIPE_WEBHOOK_SECRET is not set');
+    logger.error('STRIPE_WEBHOOK_SECRET is not set');
     return NextResponse.json(
       { error: 'Webhook not configured' },
       { status: 500 }
@@ -46,14 +47,14 @@ export async function POST(request: NextRequest) {
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error('Webhook signature verification failed:', err);
+    logger.error('Webhook signature verification failed:', err);
     return NextResponse.json(
       { error: 'Invalid signature' },
       { status: 400 }
     );
   }
 
-  console.log(`[Stripe Webhook] Event: ${event.type}`);
+  logger.debug(`[Stripe Webhook] Event: ${event.type}`);
 
   try {
     switch (event.type) {
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
         const subscriptionId = session.subscription as string;
 
         if (!userId) {
-          console.error('No userId in checkout session metadata');
+          logger.error('No userId in checkout session metadata');
           break;
         }
 
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
           currentPeriodEnd: periodEnd,
         });
 
-        console.log(`[Stripe Webhook] User ${userId} upgraded to Pro`);
+        logger.debug(`[Stripe Webhook] User ${userId} upgraded to Pro`);
         break;
       }
 
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
           ` as Array<{ user_id: string }>;
 
           if (users.length === 0) {
-            console.error('Could not find user for subscription update');
+            logger.error('Could not find user for subscription update');
             break;
           }
 
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        console.log(`[Stripe Webhook] Subscription updated for user`);
+        logger.debug('[Stripe Webhook] Subscription updated for user');
         break;
       }
 
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
           WHERE stripe_customer_id = ${customerId}
         `;
 
-        console.log(`[Stripe Webhook] Subscription canceled`);
+        logger.debug('[Stripe Webhook] Subscription canceled');
         break;
       }
 
@@ -160,17 +161,17 @@ export async function POST(request: NextRequest) {
           WHERE stripe_customer_id = ${customerId}
         `;
 
-        console.log(`[Stripe Webhook] Payment failed for customer ${customerId}`);
+        logger.debug(`[Stripe Webhook] Payment failed for customer ${customerId}`);
         break;
       }
 
       default:
-        console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`);
+        logger.debug(`[Stripe Webhook] Unhandled event type: ${event.type}`);
     }
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error('Webhook handler error:', error);
+    logger.error('Webhook handler error:', error);
     return NextResponse.json(
       { error: 'Webhook handler failed' },
       { status: 500 }

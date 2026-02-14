@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 // Helper to get user ID from auth header
 function getUserIdFromHeader(request: NextRequest): string | null {
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error('Failed to fetch conversations:', error);
+    logger.error('Failed to fetch conversations:', error);
     return NextResponse.json(
       { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch conversations' } },
       { status: 500 }
@@ -91,7 +92,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Failed to delete conversation:', error);
+    logger.error('Failed to delete conversation:', error);
     return NextResponse.json(
       { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to delete conversation' } },
       { status: 500 }
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Failed to create conversation:', error);
+    logger.error('Failed to create conversation:', error);
     return NextResponse.json(
       { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create conversation' } },
       { status: 500 }

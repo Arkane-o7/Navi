@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { refreshAccessToken } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
       refreshToken: tokens.refreshToken,
     });
   } catch (error) {
-    console.error('Token refresh failed:', error);
+    logger.error('Token refresh failed:', error);
     return NextResponse.json(
       { error: 'Failed to refresh token' },
       { status: 401 }

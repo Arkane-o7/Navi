@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { sql } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 // Lazy init Stripe to avoid build errors
 let stripe: Stripe | null = null;
@@ -15,6 +16,10 @@ function getStripe(): Stripe {
     });
   }
   return stripe;
+}
+
+function getCheckoutErrorRedirect(request: NextRequest, reason: string): URL {
+  return new URL(`/api/subscription/canceled?reason=${encodeURIComponent(reason)}`, request.url);
 }
 
 // Helper to get user ID from auth header
@@ -36,7 +41,7 @@ export async function GET(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get('userId');
 
   if (!userId) {
-    return NextResponse.redirect(new URL('/error?message=unauthorized', request.url));
+    return NextResponse.redirect(getCheckoutErrorRedirect(request, 'unauthorized'));
   }
 
   try {
@@ -46,7 +51,7 @@ export async function GET(request: NextRequest) {
     ` as Array<{ id: string; email: string }>;
 
     if (users.length === 0) {
-      return NextResponse.redirect(new URL('/error?message=user_not_found', request.url));
+      return NextResponse.redirect(getCheckoutErrorRedirect(request, 'user_not_found'));
     }
 
     const user = users[0];
@@ -96,8 +101,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(session.url!);
   } catch (error) {
-    console.error('Checkout error:', error);
-    return NextResponse.redirect(new URL('/error?message=checkout_failed', request.url));
+    logger.error('Checkout error:', error);
+    return NextResponse.redirect(getCheckoutErrorRedirect(request, 'checkout_failed'));
   }
 }
 
@@ -178,7 +183,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Checkout error:', error);
+    logger.error('Checkout error:', error);
     return NextResponse.json(
       { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create checkout session' } },
       { status: 500 }

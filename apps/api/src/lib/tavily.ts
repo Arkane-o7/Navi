@@ -3,6 +3,8 @@
  * https://tavily.com/
  */
 
+import { logger } from '@/lib/logger';
+
 const TAVILY_API_URL = 'https://api.tavily.com/search';
 
 export interface TavilySearchResult {
@@ -80,7 +82,7 @@ export async function searchWeb(
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('Tavily API error:', error);
+      logger.error('Tavily API error:', error);
       throw new Error(`Tavily API error: ${response.status}`);
     }
 
@@ -97,7 +99,7 @@ export async function searchWeb(
       answer: data.answer,
     };
   } catch (error) {
-    console.error('Tavily search failed:', error);
+    logger.error('Tavily search failed:', error);
     // Return empty results on error instead of throwing
     return {
       query,

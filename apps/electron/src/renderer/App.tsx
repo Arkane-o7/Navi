@@ -4,6 +4,7 @@ import { useSettingsStore } from './stores/settingsStore';
 import { useAuthStore } from './stores/authStore';
 import { streamChat, ChatMessage } from './hooks/useChat';
 import { Markdown } from './components/Markdown';
+import { logger } from '../shared/logger';
 
 // Logo images for light/dark modes
 import logoDark from '../../assets/logo-dark.png';
@@ -79,7 +80,7 @@ export default function App() {
     // Listen for auth callback from main process (when user signs in via Settings)
     if (window.navi?.onAuthCallback) {
       const unsubAuth = window.navi.onAuthCallback(async (data) => {
-        console.log('[App] Received auth callback:', data.userId);
+        logger.debug('[App] Received auth callback:', data.userId);
         setTokens(data.accessToken, data.refreshToken);
         await syncUser();
         // Fetch conversations after sign in
@@ -136,7 +137,7 @@ export default function App() {
     const { setTheme } = useSettingsStore.getState();
 
     const unsubscribe = window.navi.onThemeChange((newTheme: string) => {
-      console.log('[App] Theme changed via IPC:', newTheme);
+      logger.debug('[App] Theme changed via IPC:', newTheme);
       setTheme(newTheme as 'system' | 'dark' | 'light');
     });
 
@@ -150,7 +151,7 @@ export default function App() {
     const { setDockBehavior } = useSettingsStore.getState();
 
     const unsubscribe = window.navi.onDockBehaviorChange((behavior) => {
-      console.log('[App] Dock behavior changed via IPC:', behavior);
+      logger.debug('[App] Dock behavior changed via IPC:', behavior);
       setDockBehavior(behavior);
     });
 
@@ -237,11 +238,11 @@ export default function App() {
   const handleDockToggle = useCallback(() => {
     if (isDocked) {
       // Undock: tell main process, which will close this window and restore overlay
-      console.log('[App] Undock requested with side:', dockBehavior);
+      logger.debug('[App] Undock requested with side:', dockBehavior);
       window.navi?.dock({ docked: false, side: dockBehavior, width: DOCK_WIDTH });
     } else {
       // Dock: tell main process, which will hide this overlay and create a new docked window
-      console.log('[App] Dock requested with side:', dockBehavior);
+      logger.debug('[App] Dock requested with side:', dockBehavior);
       window.navi?.dock({ docked: true, side: dockBehavior, width: DOCK_WIDTH });
     }
   }, [isDocked, dockBehavior]);
@@ -295,18 +296,18 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('[Submit] Input:', input);
+    logger.debug('[Submit] Input:', input);
     if (!input.trim() || isLoading) return;
 
     // Create conversation if none exists
     let convId = conversation?.id;
     if (!convId) {
       convId = createConversation();
-      console.log('[Submit] Created conversation:', convId);
+      logger.debug('[Submit] Created conversation:', convId);
     }
 
     // Add user message
-    console.log('[Submit] Adding user message');
+    logger.debug('[Submit] Adding user message');
     addMessage(convId, { role: 'user', content: input.trim() });
     const userInput = input.trim();
     setInput('');
@@ -327,8 +328,8 @@ export default function App() {
       content: m.content,
     }));
 
-    console.log('[Submit] History being sent:', JSON.stringify(historyForApi, null, 2));
-    console.log('[Submit] Current message:', userInput);
+    logger.debug('[Submit] History length being sent:', historyForApi.length);
+    logger.debug('[Submit] Current message:', userInput);
 
     await streamChat({
       message: userInput,

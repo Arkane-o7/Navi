@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthorizationUrl } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     // Redirect to WorkOS auth page
     return NextResponse.redirect(authUrl);
   } catch (error) {
-    console.error('Failed to generate auth URL:', error);
+    logger.error('Failed to generate auth URL:', error);
     return NextResponse.json(
       { error: 'Failed to generate authorization URL' },
       { status: 500 }

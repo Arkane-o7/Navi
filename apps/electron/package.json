@@ -12,7 +12,8 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "package": "electron-forge package",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:vercel-edge": "node ../../scripts/vercel-edge-test.mjs"
   },
   "dependencies": {
     "@navi/shared": "workspace:*",

@@ -1,7 +1,4 @@
-import { neon, neonConfig } from '@neondatabase/serverless';
-
-// Enable connection pooling
-neonConfig.fetchConnectionCache = true;
+import { neon } from '@neondatabase/serverless';
 
 // Lazy initialization to avoid build-time errors
 let _sql: ReturnType<typeof neon> | null = null;

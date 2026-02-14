@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import Settings from './Settings';
 import './styles/settings.css';
+import { logger } from '../../shared/logger';
 
 // Error boundary for debugging
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -15,7 +16,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[Settings] React Error:', error, errorInfo);
+    logger.error('[Settings] React Error:', error, errorInfo);
   }
 
   render() {
@@ -37,11 +38,11 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 }
 
-console.log('[Settings] Mounting Root...');
+logger.debug('[Settings] Mounting Root...');
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
-  console.error('[Settings] Root element not found!');
+  logger.error('[Settings] Root element not found!');
   document.body.innerHTML = '<div style="color:red">Root element missing!</div>';
 } else {
   ReactDOM.createRoot(rootElement).render(
@@ -51,6 +52,6 @@ if (!rootElement) {
       </ErrorBoundary>
     </React.StrictMode>
   );
-  console.log('[Settings] Root rendered.');
+  logger.debug('[Settings] Root rendered.');
 }
 

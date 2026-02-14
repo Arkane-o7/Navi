@@ -3,6 +3,7 @@ import { streamChatCompletion, ChatCompletionMessage } from '@/lib/groq';
 import { getSubscription, sql } from '@/lib/db';
 import { checkDailyMessageLimit, incrementDailyMessageCount } from '@/lib/redis';
 import { needsSearch, searchWeb, formatSearchContext } from '@/lib/tavily';
+import { logger } from '@/lib/logger';
 
 // Helper to get user ID from auth header
 function getUserIdFromHeader(request: NextRequest): string | null {
@@ -20,7 +21,15 @@ function getUserIdFromHeader(request: NextRequest): string | null {
 
 export async function POST(request: NextRequest) {
     try {
-        const body = await request.json();
+        let body: { message?: string; history?: Array<{ role: string; content: string }> };
+        try {
+            body = await request.json();
+        } catch {
+            return NextResponse.json(
+                { success: false, error: { code: 'BAD_REQUEST', message: 'Invalid JSON body' } },
+                { status: 400 }
+            );
+        }
         const { message, history = [] } = body;
 
         if (!message) {
@@ -60,7 +69,7 @@ export async function POST(request: NextRequest) {
 
         // For users with past due subscriptions, warn them
         if (subscription.status === 'past_due') {
-            console.warn(`[Chat] User ${userId} has past_due subscription`);
+            logger.warn(`[Chat] User ${userId} has past_due subscription`);
         }
 
         // Increment daily message count for free tier users
@@ -68,7 +77,7 @@ export async function POST(request: NextRequest) {
         if (subscription.tier === 'free') {
             const countIdentifier = userId || identifier;
             // Fire and forget - don't await to avoid blocking the stream
-            incrementDailyMessageCount(countIdentifier).catch(console.error);
+            incrementDailyMessageCount(countIdentifier).catch((error) => logger.error('[Chat] Failed to increment daily count:', error));
         }
 
         // Check if message needs web search for real-time information
@@ -81,7 +90,7 @@ export async function POST(request: NextRequest) {
                     enhancedMessage = message + searchContext;
                 }
             } catch (error) {
-                console.error('[Chat] Web search failed, continuing without:', error);
+                logger.error('[Chat] Web search failed, continuing without:', error);
                 // Continue without search results - graceful degradation
             }
         }
@@ -107,7 +116,7 @@ export async function POST(request: NextRequest) {
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     controller.close();
                 } catch (error) {
-                    console.error('Stream error:', error);
+                    logger.error('[Chat] Stream error:', error);
                     const errorData = `data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`;
                     controller.enqueue(encoder.encode(errorData));
                     controller.close();
@@ -123,7 +132,7 @@ export async function POST(request: NextRequest) {
             },
         });
     } catch (error) {
-        console.error('Chat error:', error);
+        logger.error('[Chat] Handler error:', error);
         return NextResponse.json(
             { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to process chat' } },
             { status: 500 }

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { logger } from '../../shared/logger';
 
 export interface User {
   id: string;
@@ -151,7 +152,7 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error) {
-          console.error('[AuthStore] Refresh failed:', error);
+          logger.error('[AuthStore] Refresh failed:', error);
           // If refresh fails, we should logout
           get().logout();
           return false;
@@ -180,21 +181,21 @@ export const useAuthStore = create<AuthState>()(
             const responseData = await response.json();
             // API returns { success: true, data: { user, subscription } }
             const userData = responseData.data || responseData;
-            console.log('[AuthStore] syncUser response:', userData);
+            logger.debug('[AuthStore] syncUser response received');
 
             if (userData.user) {
               // Update subscription and user data
-              console.log('[AuthStore] Updating user and subscription:', userData.subscription);
+              logger.debug('[AuthStore] Updating user and subscription');
               set((state) => ({
                 user: { ...state.user, ...userData.user },
                 subscription: { ...state.subscription, ...userData.subscription }
               }));
             }
           } else {
-            console.error('[AuthStore] syncUser failed with status:', response.status);
+            logger.error('[AuthStore] syncUser failed with status:', response.status);
           }
         } catch (error) {
-          console.error('[AuthStore] Sync user failed:', error);
+          logger.error('[AuthStore] Sync user failed:', error);
         }
       },
 
@@ -224,7 +225,7 @@ export const useAuthStore = create<AuthState>()(
       // Add error handling for corrupted storage
       onRehydrateStorage: () => (state, error) => {
         if (error) {
-          console.error('[AuthStore] Failed to rehydrate:', error);
+          logger.error('[AuthStore] Failed to rehydrate:', error);
         }
       },
     }

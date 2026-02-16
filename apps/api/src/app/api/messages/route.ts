@@ -25,37 +25,53 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Verify user owns the conversation
-        const conv = await sql`
-      SELECT id FROM conversations WHERE id = ${conversationId} AND user_id = ${userId}
-    ` as Array<{ id: string }>;
+        // Use provided ID or generate new one
+        const messageId = id || crypto.randomUUID();
 
-        if (conv.length === 0) {
+        const result = await sql`
+            WITH owned AS (
+                SELECT id
+                FROM conversations
+                WHERE id = ${conversationId} AND user_id = ${userId}
+            ),
+            upserted_message AS (
+                INSERT INTO messages (id, conversation_id, role, content, created_at)
+                SELECT ${messageId}, owned.id, ${role}, ${content}, NOW()
+                FROM owned
+                ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content
+                RETURNING id
+            ),
+            touched_conversation AS (
+                UPDATE conversations
+                SET updated_at = NOW()
+                WHERE id IN (SELECT id FROM owned)
+                RETURNING id
+            )
+            SELECT
+                EXISTS(SELECT 1 FROM owned) AS conversation_exists,
+                (SELECT id FROM upserted_message LIMIT 1) AS persisted_message_id,
+                (SELECT COUNT(*) FROM touched_conversation) AS touched_count
+        ` as Array<{
+            conversation_exists: boolean;
+            persisted_message_id: string | null;
+            touched_count: number;
+        }>;
+
+        const conversationExists = result[0]?.conversation_exists ?? false;
+        if (!conversationExists) {
             return NextResponse.json(
                 { success: false, error: { code: 'NOT_FOUND', message: 'Conversation not found' } },
                 { status: 404 }
             );
         }
 
-        // Use provided ID or generate new one
-        const messageId = id || crypto.randomUUID();
-
-        await sql`
-      INSERT INTO messages (id, conversation_id, role, content, created_at)
-      VALUES (${messageId}, ${conversationId}, ${role}, ${content}, NOW())
-      ON CONFLICT (id) DO UPDATE SET content = ${content}
-    `;
-
-        // Update conversation's updated_at
-        await sql`
-      UPDATE conversations SET updated_at = NOW() WHERE id = ${conversationId}
-    `;
+        const persistedMessageId = result[0]?.persisted_message_id || messageId;
 
         return NextResponse.json({
             success: true,
             data: {
                 message: {
-                    id: messageId,
+                    id: persistedMessageId,
                     conversationId,
                     role,
                     content,
@@ -93,34 +109,55 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Verify user owns the conversation
-        const conv = await sql`
-      SELECT id FROM conversations WHERE id = ${conversationId} AND user_id = ${userId}
-    ` as Array<{ id: string }>;
+        const result = await sql`
+            WITH owned AS (
+                SELECT id
+                FROM conversations
+                WHERE id = ${conversationId} AND user_id = ${userId}
+            ),
+            aggregated_messages AS (
+                SELECT COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', m.id,
+                            'role', m.role,
+                            'content', m.content,
+                            'timestamp', EXTRACT(EPOCH FROM m.created_at) * 1000
+                        )
+                        ORDER BY m.created_at ASC
+                    ),
+                    '[]'::json
+                ) AS messages
+                FROM messages m
+                WHERE m.conversation_id IN (SELECT id FROM owned)
+            )
+            SELECT
+                EXISTS(SELECT 1 FROM owned) AS conversation_exists,
+                (SELECT messages FROM aggregated_messages) AS messages
+        ` as Array<{
+            conversation_exists: boolean;
+            messages: Array<{ id: string; role: string; content: string; timestamp: number }> | null;
+        }>;
 
-        if (conv.length === 0) {
+        const conversationExists = result[0]?.conversation_exists ?? false;
+        if (!conversationExists) {
             return NextResponse.json(
                 { success: false, error: { code: 'NOT_FOUND', message: 'Conversation not found' } },
                 { status: 404 }
             );
         }
 
-        const messages = await sql`
-      SELECT id, role, content, created_at
-      FROM messages
-      WHERE conversation_id = ${conversationId}
-      ORDER BY created_at ASC
-    ` as Array<{ id: string; role: string; content: string; created_at: string }>;
+        const messages = Array.isArray(result[0]?.messages) ? result[0].messages : [];
 
         return NextResponse.json({
             success: true,
             data: {
-                messages: messages.map(m => ({
+                messages: messages.map((m) => ({
                     id: m.id,
                     role: m.role,
                     content: m.content,
-                    timestamp: new Date(m.created_at).getTime(),
-                }))
+                    timestamp: m.timestamp,
+                })),
             },
         });
     } catch (error) {

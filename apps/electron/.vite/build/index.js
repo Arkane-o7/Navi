@@ -11,6 +11,7 @@ const api = {
   openExternal: (url) => electron.ipcRenderer.send("shell:openExternal", url),
   // Theme
   getTheme: () => electron.ipcRenderer.invoke("theme:get"),
+  getAppVersion: () => electron.ipcRenderer.invoke("app:getVersion"),
   // Settings sync - broadcast theme changes to all windows
   setTheme: (theme) => electron.ipcRenderer.send("settings:setTheme", theme),
   onThemeChange: (callback) => {

@@ -26,6 +26,7 @@ const api = {
 
   // Theme
   getTheme: (): Promise<boolean> => ipcRenderer.invoke('theme:get'),
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
 
   // Settings sync - broadcast theme changes to all windows
   setTheme: (theme: string) => ipcRenderer.send('settings:setTheme', theme),

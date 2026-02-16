@@ -50,7 +50,7 @@ const tests = [
   ['messages create no auth', '/api/messages', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }, [401]],
 
   ['chat missing message', '/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }, [400]],
-  ['chat invalid json', '/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{bad' }, [400, 500]],
+  ['chat invalid json', '/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{bad' }, [400]],
 
   ['auth login redirect', '/api/auth/login', { followRedirect: false }, [302, 307, 308]],
   ['auth callback missing code', '/api/auth/callback', {}, [400]],

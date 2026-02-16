@@ -663,6 +663,7 @@ ipcMain.on('shell:openExternal', (_e, url: string) => {
 });
 
 ipcMain.handle('theme:get', () => nativeTheme.shouldUseDarkColors);
+ipcMain.handle('app:getVersion', () => app.getVersion());
 
 // Settings sync - broadcast theme changes to all windows
 ipcMain.on('settings:setTheme', (_e, theme: string) => {

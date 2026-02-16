@@ -1,25 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { streamChatCompletion, ChatCompletionMessage } from '@/lib/groq';
-import { getSubscription, sql } from '@/lib/db';
-import { checkDailyMessageLimit, incrementDailyMessageCount } from '@/lib/redis';
+import { streamChatCompletion, LlmChatMessage } from '@/lib/llm';
+import { getSubscription } from '@/lib/db';
+import { consumeDailyMessageSlot, rollbackDailyMessageSlot } from '@/lib/redis';
 import { needsSearch, searchWeb, formatSearchContext } from '@/lib/tavily';
 import { logger } from '@/lib/logger';
-
-// Helper to get user ID from auth header
-function getUserIdFromHeader(request: NextRequest): string | null {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) return null;
-
-    const token = authHeader.slice(7);
-    try {
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-        return payload.sub || null;
-    } catch {
-        return null;
-    }
-}
+import { getUserIdFromHeader } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
+    const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
+    const requestStartedAt = Date.now();
+
+    let isFreeTier = false;
+    let freeTierIdentifier: string | null = null;
+    let consumedFreeTierSlot = false;
+
     try {
         let body: { message?: string; history?: Array<{ role: string; content: string }> };
         try {
@@ -45,40 +39,44 @@ export async function POST(request: NextRequest) {
         // For anonymous users, use IP-based rate limiting
         const identifier = userId || request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'anonymous';
 
-        // Run subscription and rate limit checks in PARALLEL for better performance
-        const [subscription, limitCheck] = await Promise.all([
-            userId ? getSubscription(userId) : Promise.resolve({ tier: 'free' as const, status: 'active' as const, periodEnd: null }),
-            checkDailyMessageLimit(identifier),
-        ]);
-
-        // For free tier users, check daily message limit
-        if (subscription.tier === 'free' && !limitCheck.allowed) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: {
-                        code: 'DAILY_LIMIT_REACHED',
-                        message: 'You\'ve used all 20 messages for today. Come back tomorrow!',
-                        remaining: 0,
-                        resetAt: limitCheck.resetAt,
-                    }
-                },
-                { status: 429 }
-            );
-        }
+        const subscription = userId
+            ? await getSubscription(userId)
+            : { tier: 'free' as const, status: 'active' as const, periodEnd: null };
 
         // For users with past due subscriptions, warn them
         if (subscription.status === 'past_due') {
-            logger.warn(`[Chat] User ${userId} has past_due subscription`);
+            logger.warn(`[Chat][${requestId}] User ${userId} has past_due subscription`);
         }
 
-        // Increment daily message count for free tier users
-        // Note: We do this AFTER checks but it's fast enough to not block
-        if (subscription.tier === 'free') {
+        // Atomically consume a free-tier daily message slot.
+        isFreeTier = subscription.tier === 'free';
+        if (isFreeTier) {
             const countIdentifier = userId || identifier;
-            // Fire and forget - don't await to avoid blocking the stream
-            incrementDailyMessageCount(countIdentifier).catch((error) => logger.error('[Chat] Failed to increment daily count:', error));
+            freeTierIdentifier = countIdentifier;
+            const limit = await consumeDailyMessageSlot(countIdentifier);
+            consumedFreeTierSlot = true;
+
+            if (!limit.allowed) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: {
+                            code: 'DAILY_LIMIT_REACHED',
+                            message: 'You\'ve used all 20 messages for today. Come back tomorrow!',
+                            remaining: 0,
+                            resetAt: limit.resetAt,
+                        }
+                    },
+                    { status: 429 }
+                );
+            }
         }
+
+        logger.info(`[Chat][${requestId}] accepted`, {
+            authenticated: Boolean(userId),
+            tier: subscription.tier,
+            historyCount: history.length,
+        });
 
         // Check if message needs web search for real-time information
         let enhancedMessage = message;
@@ -90,13 +88,13 @@ export async function POST(request: NextRequest) {
                     enhancedMessage = message + searchContext;
                 }
             } catch (error) {
-                logger.error('[Chat] Web search failed, continuing without:', error);
+                logger.error(`[Chat][${requestId}] Web search failed, continuing without:`, error);
                 // Continue without search results - graceful degradation
             }
         }
 
         // Build messages array for Groq
-        const messages: ChatCompletionMessage[] = [
+        const messages: LlmChatMessage[] = [
             ...history.map((msg: { role: string; content: string }) => ({
                 role: msg.role as 'user' | 'assistant',
                 content: msg.content,
@@ -108,15 +106,37 @@ export async function POST(request: NextRequest) {
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
             async start(controller) {
+                const streamStartedAt = Date.now();
+                let firstTokenAt: number | null = null;
+                let emittedChunks = 0;
                 try {
                     for await (const chunk of streamChatCompletion(messages)) {
+                        emittedChunks += 1;
+                        if (firstTokenAt === null) {
+                            firstTokenAt = Date.now();
+                        }
+
                         const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
                         controller.enqueue(encoder.encode(data));
                     }
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     controller.close();
+
+                    logger.info(`[Chat][${requestId}] completed`, {
+                        durationMs: Date.now() - streamStartedAt,
+                        totalDurationMs: Date.now() - requestStartedAt,
+                        firstTokenMs: firstTokenAt ? firstTokenAt - streamStartedAt : null,
+                        emittedChunks,
+                    });
                 } catch (error) {
-                    logger.error('[Chat] Stream error:', error);
+                    logger.error(`[Chat][${requestId}] Stream error:`, error);
+
+                    if (consumedFreeTierSlot && freeTierIdentifier && emittedChunks === 0) {
+                        rollbackDailyMessageSlot(freeTierIdentifier).catch((rollbackError) => {
+                            logger.error(`[Chat][${requestId}] Failed to rollback free-tier slot:`, rollbackError);
+                        });
+                    }
+
                     const errorData = `data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`;
                     controller.enqueue(encoder.encode(errorData));
                     controller.close();
@@ -129,10 +149,17 @@ export async function POST(request: NextRequest) {
                 'Content-Type': 'text/event-stream',
                 'Cache-Control': 'no-cache',
                 'Connection': 'keep-alive',
+                'X-Navi-Request-Id': requestId,
             },
         });
     } catch (error) {
-        logger.error('[Chat] Handler error:', error);
+        if (consumedFreeTierSlot && freeTierIdentifier) {
+            rollbackDailyMessageSlot(freeTierIdentifier).catch((rollbackError) => {
+                logger.error(`[Chat][${requestId}] Failed to rollback free-tier slot after handler error:`, rollbackError);
+            });
+        }
+
+        logger.error(`[Chat][${requestId}] Handler error after ${Date.now() - requestStartedAt}ms:`, error);
         return NextResponse.json(
             { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to process chat' } },
             { status: 500 }

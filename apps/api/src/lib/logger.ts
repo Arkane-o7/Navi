@@ -7,7 +7,7 @@ export const logger = {
     if (isDevelopment) console.debug(...args);
   },
   info: (...args: LogArgs) => {
-    if (isDevelopment) console.info(...args);
+    console.info(...args);
   },
   warn: (...args: LogArgs) => {
     console.warn(...args);

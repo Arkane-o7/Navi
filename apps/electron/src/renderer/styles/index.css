@@ -20,6 +20,8 @@
   --user-bubble-bg: rgba(255, 255, 255, 0.08);
   --user-bubble-border: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+  --scrollbar-track: rgba(255, 255, 255, 0.04);
 }
 
 /* Light Theme */
@@ -34,6 +36,8 @@
   --user-bubble-bg: rgba(0, 0, 0, 0.06);
   --user-bubble-border: rgba(0, 0, 0, 0.1);
   --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
+  --scrollbar-track: rgba(0, 0, 0, 0.05);
 }
 
 *,
@@ -42,6 +46,36 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 html,
@@ -220,12 +254,16 @@ body {
 }
 
 .messages::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .messages::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 3px;
+  border-radius: 999px;
+}
+
+.messages::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 .message {

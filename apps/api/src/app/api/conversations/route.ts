@@ -1,20 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { logger } from '@/lib/logger';
-
-// Helper to get user ID from auth header
-function getUserIdFromHeader(request: NextRequest): string | null {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-    return payload.sub || null;
-  } catch {
-    return null;
-  }
-}
+import { getUserIdFromHeader } from '@/lib/auth';
 
 // GET - List conversations
 export async function GET(request: NextRequest) {
@@ -28,6 +15,65 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const includeMessages = new URL(request.url).searchParams.get('includeMessages') === 'true';
+
+    if (includeMessages) {
+      const conversations = await sql`
+        WITH recent_conversations AS (
+          SELECT id, title, created_at, updated_at
+          FROM conversations
+          WHERE user_id = ${userId}
+          ORDER BY updated_at DESC
+          LIMIT 50
+        )
+        SELECT
+          c.id,
+          c.title,
+          c.created_at,
+          c.updated_at,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', m.id,
+                'role', m.role,
+                'content', m.content,
+                'timestamp', EXTRACT(EPOCH FROM m.created_at) * 1000
+              )
+              ORDER BY m.created_at ASC
+            ) FILTER (WHERE m.id IS NOT NULL),
+            '[]'::json
+          ) AS messages
+        FROM recent_conversations c
+        LEFT JOIN messages m ON m.conversation_id = c.id
+        GROUP BY c.id, c.title, c.created_at, c.updated_at
+        ORDER BY c.updated_at DESC
+      ` as Array<{
+        id: string;
+        title: string | null;
+        created_at: string;
+        updated_at: string;
+        messages: Array<{ id: string; role: string; content: string; timestamp: number }> | null;
+      }>;
+
+      return NextResponse.json({
+        success: true,
+        data: conversations.map((c) => ({
+          id: c.id,
+          title: c.title,
+          createdAt: c.created_at,
+          updatedAt: c.updated_at,
+          messages: Array.isArray(c.messages)
+            ? c.messages.map((m) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              timestamp: m.timestamp,
+            }))
+            : [],
+        })),
+      });
+    }
+
     const conversations = await sql`
       SELECT id, title, created_at, updated_at
       FROM conversations

@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 
 export async function GET() {
   const envCheck = {
+    hasGeminiKey: !!process.env.GEMINI_API_KEY,
     hasGroqKey: !!process.env.GROQ_API_KEY,
     hasRedisUrl: !!process.env.UPSTASH_REDIS_REST_URL,
     hasRedisToken: !!process.env.UPSTASH_REDIS_REST_TOKEN,
@@ -23,19 +24,23 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { message } = body;
 
-    // Test Groq directly with fetch
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    // Test Gemini directly with fetch
+    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        messages: [
-          { role: 'user', content: message || 'Say hello' }
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: message || 'Say hello' }],
+          }
         ],
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 100,
+        generationConfig: {
+          maxOutputTokens: 100,
+        },
       }),
     });
 
@@ -49,10 +54,11 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '';
 
     return NextResponse.json({
       success: true,
-      response: data.choices?.[0]?.message?.content,
+      response: text,
     });
   } catch (error) {
     logger.error('Debug error:', error);

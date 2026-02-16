@@ -3,14 +3,34 @@ import { authenticateWithCode } from '@/lib/auth';
 import { sql } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
+function getSafeWebReturnTo(raw: string | null): string {
+  if (!raw) return 'http://localhost:3000';
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.origin;
+    }
+  } catch {
+    // ignore and fall through
+  }
+  return 'http://localhost:3000';
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const state = searchParams.get('state');
+  const platform = searchParams.get('platform');
+  const webReturnTo = getSafeWebReturnTo(searchParams.get('return_to'));
   const error = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
 
   if (error) {
+    if (platform === 'web') {
+      const webErrorUrl = `${webReturnTo}/auth/callback?error=${encodeURIComponent(error)}&description=${encodeURIComponent(errorDescription || '')}`;
+      return NextResponse.redirect(webErrorUrl);
+    }
+
     // Redirect to Electron app with error
     const errorUrl = `navi://auth/error?error=${encodeURIComponent(error)}&description=${encodeURIComponent(errorDescription || '')}`;
     return NextResponse.redirect(errorUrl);
@@ -36,6 +56,11 @@ export async function GET(request: Request) {
         updated_at = CURRENT_TIMESTAMP
     `;
 
+    if (platform === 'web') {
+      const webSuccessUrl = `${webReturnTo}/auth/callback?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}&user_id=${encodeURIComponent(user.id)}&state=${encodeURIComponent(state || '')}`;
+      return NextResponse.redirect(webSuccessUrl);
+    }
+
     // Redirect to Electron app with tokens
     // The Electron app registers a custom protocol handler (navi://)
     const successUrl = `navi://auth/callback?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}&user_id=${encodeURIComponent(user.id)}&state=${encodeURIComponent(state || '')}`;
@@ -45,6 +70,11 @@ export async function GET(request: Request) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error('[Auth Callback] Authentication failed:', errorMessage);
     logger.error('[Auth Callback] Full error:', err);
+
+    if (platform === 'web') {
+      const webErrorUrl = `${webReturnTo}/auth/callback?error=authentication_failed&description=${encodeURIComponent(errorMessage)}`;
+      return NextResponse.redirect(webErrorUrl);
+    }
 
     // Include more detail in the error redirect
     const errorUrl = `navi://auth/error?error=authentication_failed&description=${encodeURIComponent(errorMessage)}`;

@@ -87,39 +87,78 @@ export async function deleteCache(key: string): Promise<void> {
 // Daily message limit for free tier users
 const FREE_TIER_DAILY_LIMIT = 20;
 
+function getTodayDailyMessageKey(userId: string, now: Date): string {
+  return `daily_messages:${userId}:${now.toISOString().split('T')[0]}`;
+}
+
+function getNextUtcMidnight(now: Date): Date {
+  const tomorrow = new Date(now);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  tomorrow.setUTCHours(0, 0, 0, 0);
+  return tomorrow;
+}
+
 export async function checkDailyMessageLimit(
   userId: string
 ): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
-  // Get the start of today (UTC)
   const now = new Date();
-  const todayKey = `daily_messages:${userId}:${now.toISOString().split('T')[0]}`;
+  const todayKey = getTodayDailyMessageKey(userId, now);
+  const resetAt = Math.floor(getNextUtcMidnight(now).getTime() / 1000);
 
   // Get current count
   const currentCount = await redis.get<number>(todayKey) || 0;
 
   if (currentCount >= FREE_TIER_DAILY_LIMIT) {
-    // Calculate reset time (midnight UTC)
-    const tomorrow = new Date(now);
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    tomorrow.setUTCHours(0, 0, 0, 0);
-
     return {
       allowed: false,
       remaining: 0,
-      resetAt: Math.floor(tomorrow.getTime() / 1000),
+      resetAt,
     };
   }
 
   return {
     allowed: true,
     remaining: FREE_TIER_DAILY_LIMIT - currentCount,
-    resetAt: 0,
+    resetAt,
+  };
+}
+
+export async function consumeDailyMessageSlot(
+  userId: string
+): Promise<{ allowed: boolean; remaining: number; resetAt: number; count: number }> {
+  const now = new Date();
+  const key = getTodayDailyMessageKey(userId, now);
+  const resetAt = Math.floor(getNextUtcMidnight(now).getTime() / 1000);
+
+  // Atomic increment ensures consistent behavior under concurrent requests.
+  const count = await redis.incr(key);
+
+  // Ensure key cleanup shortly after day rollover.
+  if (count === 1) {
+    const secondsUntilReset = Math.max(60, resetAt - Math.floor(now.getTime() / 1000));
+    await redis.expire(key, secondsUntilReset + (60 * 60));
+  }
+
+  if (count > FREE_TIER_DAILY_LIMIT) {
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt,
+      count,
+    };
+  }
+
+  return {
+    allowed: true,
+    remaining: FREE_TIER_DAILY_LIMIT - count,
+    resetAt,
+    count,
   };
 }
 
 export async function incrementDailyMessageCount(userId: string): Promise<number> {
   const now = new Date();
-  const todayKey = `daily_messages:${userId}:${now.toISOString().split('T')[0]}`;
+  const todayKey = getTodayDailyMessageKey(userId, now);
 
   // Increment and set expiry to end of day + 1 hour buffer
   const newCount = await redis.incr(todayKey);
@@ -130,8 +169,21 @@ export async function incrementDailyMessageCount(userId: string): Promise<number
   return newCount;
 }
 
+export async function rollbackDailyMessageSlot(userId: string): Promise<number> {
+  const now = new Date();
+  const todayKey = getTodayDailyMessageKey(userId, now);
+
+  const newCount = await redis.decr(todayKey);
+  if (newCount < 0) {
+    await redis.set(todayKey, 0);
+    return 0;
+  }
+
+  return newCount;
+}
+
 export async function getDailyMessageCount(userId: string): Promise<number> {
   const now = new Date();
-  const todayKey = `daily_messages:${userId}:${now.toISOString().split('T')[0]}`;
+  const todayKey = getTodayDailyMessageKey(userId, now);
   return await redis.get<number>(todayKey) || 0;
 }

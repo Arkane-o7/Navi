@@ -26,6 +26,7 @@ declare global {
 
       // Theme
       getTheme: () => Promise<boolean>;
+      getAppVersion: () => Promise<string>;
       setTheme: (theme: string) => void;
       onThemeChange: (callback: (theme: string) => void) => () => void;
 

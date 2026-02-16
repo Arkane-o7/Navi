@@ -1,5 +1,5 @@
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import Settings from './Settings';
 import './styles/settings.css';
 import { logger } from '../../shared/logger';
@@ -45,7 +45,7 @@ if (!rootElement) {
   logger.error('[Settings] Root element not found!');
   document.body.innerHTML = '<div style="color:red">Root element missing!</div>';
 } else {
-  ReactDOM.createRoot(rootElement).render(
+  createRoot(rootElement).render(
     <React.StrictMode>
       <ErrorBoundary>
         <Settings />

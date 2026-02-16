@@ -1,314 +1,225 @@
-<p align="center">
-  <img src="apps/electron/assets/logo-dark.png" alt="Navi Logo" width="120" height="120" />
-</p>
+# Navi
 
-<h1 align="center">Navi</h1>
+Spotlight-style AI desktop assistant built with **Electron + React** and backed by a **Next.js API**.
 
-<p align="center">
-  <strong>A Spotlight-style AI assistant for your desktop</strong>
-</p>
-
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#development">Development</a> •
-  <a href="#architecture">Architecture</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#contributing">Contributing</a>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform" />
-  <img src="https://img.shields.io/badge/Node.js-%3E%3D20-green" alt="Node.js" />
-  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License" />
-</p>
+Navi runs as a tray app, opens instantly with a global shortcut, streams responses from Gemini, supports optional web search context, and syncs chats when authenticated.
 
 ---
 
-## ✨ Features
+## What’s in this repo
 
-- **⚡ Instant Access** — Summon Navi anywhere with a global keyboard shortcut (`Cmd+\`` on macOS, `Alt+\`` on Windows/Linux)
-- **🤖 Powered by LLMs** — Leverages Groq's ultra-fast LLaMA 3.3 70B model for intelligent responses
-- **🔍 Real-time Web Search** — Automatically searches the web for current information when needed (via Tavily)
-- **💬 Conversation History** — Maintains context across messages with cloud sync support
-- **🌓 Dark/Light Mode** — Follows your system theme or set your preference
-- **🔐 Secure Authentication** — Enterprise-grade auth via WorkOS with Google SSO support
-- **📦 Cross-Platform** — Native builds for macOS, Windows, and Linux
-- **🔄 Auto-Updates** — Seamless updates delivered via GitHub Releases
+Navi is a pnpm workspace + Turborepo monorepo:
+
+- `apps/electron` — Desktop app (main/preload/renderer)
+- `apps/api` — Next.js API (chat, auth, messages, subscriptions, health)
+- `apps/website` — Next.js web client with shared auth/chat/preferences sync
+- `packages/shared` — shared package namespace (currently minimal)
 
 ---
 
-## 📥 Installation
+## Tech stack
 
-### Download Pre-built Binaries
-
-Download the latest release for your platform from the [Releases page](https://github.com/Arkane-o7/Navi/releases):
-
-| Platform | Download |
-|----------|----------|
-| macOS    | `Navi-x.x.x.dmg` or `Navi-darwin-x64-x.x.x.zip` |
-| Windows  | `Navi-x.x.x Setup.exe` |
-| Linux    | `Navi-linux-x64-x.x.x.zip` |
-
-### macOS Notes
-
-Since the app is ad-hoc signed (not Apple notarized), you'll need to:
-1. Right-click the app and select "Open"
-2. Click "Open" in the confirmation dialog
+- **Desktop:** Electron, React 18, Zustand, Vite, Electron Forge
+- **API:** Next.js 16 (App Router), TypeScript, Zod
+- **LLM:** Gemini (primary), Groq (rate-limit fallback only)
+- **Data:** Neon Postgres, Upstash Redis
+- **Auth:** WorkOS AuthKit + deep-link callback (`navi://`)
+- **Optional billing:** Stripe
+- **Deploy:** Vercel (API), GitHub Releases (Electron artifacts + auto update)
 
 ---
 
-## 🚀 Development
+## Prerequisites
 
-### Prerequisites
-
-- **Node.js** ≥ 20
-- **pnpm** 9.x (recommended) — `npm install -g pnpm@9`
-
-### Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/Arkane-o7/Navi.git
-cd Navi
-
-# Install dependencies
-pnpm install
-
-# Start the development servers (both API and Electron)
-pnpm dev
-
-# Or start them separately:
-pnpm dev:api       # Start the API server on http://localhost:3001
-pnpm dev:electron  # Start the Electron app
-```
-
-### Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start all apps in development mode (via Turborepo) |
-| `pnpm dev:api` | Start the Next.js API server |
-| `pnpm dev:electron` | Start the Electron app |
-| `pnpm build` | Build all apps for production |
-| `pnpm build:electron` | Build the Electron app |
-| `pnpm build:api` | Build the API server |
-| `pnpm lint` | Run linting across all packages |
+- Node.js **>= 20**
+- pnpm **9.x**
 
 ---
 
-## 🏗️ Architecture
+## Quick start
 
-Navi is built as a **monorepo** using [Turborepo](https://turbo.build/) and [pnpm workspaces](https://pnpm.io/workspaces):
+1. Install dependencies from repo root:
+   - `pnpm install`
+2. Start everything:
+   - `pnpm dev`
 
-```
-navi/
-├── apps/
-│   ├── api/           # Next.js API server (deployed to Vercel)
-│   │   ├── src/
-│   │   │   ├── app/api/     # API routes
-│   │   │   │   ├── auth/    # WorkOS authentication
-│   │   │   │   ├── chat/    # LLM chat endpoint (streaming)
-│   │   │   │   ├── conversations/
-│   │   │   │   ├── messages/
-│   │   │   │   ├── subscription/
-│   │   │   │   └── user/
-│   │   │   └── lib/         # Shared utilities
-│   │   │       ├── auth.ts    # WorkOS integration
-│   │   │       ├── db.ts      # Neon PostgreSQL
-│   │   │       ├── groq.ts    # Groq LLM client
-│   │   │       ├── redis.ts   # Upstash Redis
-│   │   │       └── tavily.ts  # Web search
-│   │   └── vercel.json        # Vercel deployment config
-│   │
-│   └── electron/      # Electron desktop app
-│       ├── src/
-│       │   ├── main/          # Main process
-│       │   ├── preload/       # Preload scripts
-│       │   └── renderer/      # React UI
-│       │       ├── App.tsx    # Main chat interface
-│       │       ├── settings/  # Settings window
-│       │       ├── stores/    # Zustand state management
-│       │       └── components/
-│       ├── assets/            # App icons and images
-│       └── forge.config.js    # Electron Forge config
-│
-├── packages/
-│   └── shared/        # Shared types and utilities
-│
-├── turbo.json         # Turborepo configuration
-├── pnpm-workspace.yaml
-└── package.json
-```
-
-### Technology Stack
-
-| Component | Technology |
-|-----------|------------|
-| **Desktop App** | Electron + React + TypeScript |
-| **Build System** | Vite + Electron Forge |
-| **API Server** | Next.js 16 (App Router) |
-| **LLM Provider** | Groq (LLaMA 3.3 70B) |
-| **Database** | Neon PostgreSQL (serverless) |
-| **Cache/Rate Limiting** | Upstash Redis |
-| **Web Search** | Tavily API |
-| **Authentication** | WorkOS (AuthKit) |
-| **Payments** | Stripe (optional) |
-| **Deployment** | Vercel (API) + GitHub Releases (Desktop) |
-| **Monorepo** | Turborepo + pnpm |
+Or run apps separately:
+- `pnpm dev:api` (API on `http://localhost:3001`)
+- `pnpm dev:electron`
+- `pnpm dev:website` (Web app on `http://localhost:3000`)
 
 ---
 
-## ⚙️ Configuration
+## Scripts
 
-### API Server (`.env` in `apps/api/`)
+### Root (`package.json`)
 
-Copy `.env.example` to `.env` and configure:
+- `pnpm dev` — run workspace dev tasks via Turbo
+- `pnpm build` — run workspace builds
+- `pnpm lint` — run workspace lint tasks
+- `pnpm dev:api` — run `@navi/api`
+- `pnpm dev:electron` — run `@navi/electron`
+- `pnpm build:api` — build `@navi/api`
+- `pnpm build:electron` — build `@navi/electron`
+- `pnpm test:vercel-edge` — run edge-compat script
 
-```bash
-# Database (Neon PostgreSQL)
-DATABASE_URL="postgresql://user:password@host.neon.tech/neondb?sslmode=require"
+### API (`apps/api/package.json`)
 
-# Cache & Rate Limiting (Upstash Redis)
-UPSTASH_REDIS_REST_URL="https://your-redis.upstash.io"
-UPSTASH_REDIS_REST_TOKEN="your-token"
+- `pnpm dev` — `next dev --port 3001`
+- `pnpm build` — `next build`
+- `pnpm start` — `next start`
+- `pnpm lint` — currently runs `next build`
 
-# LLM Provider (Groq)
-GROQ_API_KEY="gsk_your_groq_api_key"
+### Electron (`apps/electron/package.json`)
 
-# Authentication (WorkOS)
-WORKOS_API_KEY="sk_your_workos_api_key"
-WORKOS_CLIENT_ID="client_your_client_id"
-
-# Web Search (Tavily) - Optional
-TAVILY_API_KEY="tvly-your-tavily-key"
-
-# Stripe (Optional - for subscriptions)
-# STRIPE_SECRET_KEY="sk_test_..."
-# STRIPE_WEBHOOK_SECRET="whsec_..."
-# STRIPE_PRO_PRICE_ID="price_..."
-
-# App Configuration
-NEXT_PUBLIC_APP_URL="https://your-app.vercel.app"
-PORT=3001
-NODE_ENV=development
-```
-
-### Electron App (`.env` in `apps/electron/`)
-
-```bash
-# API URL (your Vercel deployment or localhost for dev)
-VITE_API_URL=http://localhost:3001
-```
+- `pnpm dev` — `electron-forge start`
+- `pnpm build` / `pnpm make` — build distributables
+- `pnpm package` — package app
+- `pnpm publish` — publish via Forge GitHub publisher
+- `pnpm lint` — `tsc --noEmit`
 
 ---
 
-## 🎹 Keyboard Shortcuts
+## Environment variables
 
-| Shortcut | macOS | Windows/Linux | Action |
-|----------|-------|---------------|--------|
-| Toggle Navi | `Cmd + \`` | `Alt + \`` | Show/hide the command palette |
-| Settings | `Cmd + .` | `Alt + .` | Open settings window |
-| New Chat | `Cmd + N` | `Alt + N` | Start a new conversation |
-| Close | `Esc` | `Esc` | Hide the panel |
+### API (`apps/api`)
 
----
+### Required for core flows
 
-## 📦 Building for Production
+- `DATABASE_URL`
+- `GEMINI_API_KEY`
+- `GROQ_API_KEY` (fallback only)
+- `UPSTASH_REDIS_REST_URL` (or `UPSTASH_REDIS_URL`)
+- `UPSTASH_REDIS_REST_TOKEN` (or `UPSTASH_REDIS_TOKEN`)
+- `WORKOS_API_KEY`
+- `WORKOS_CLIENT_ID`
 
-### Build Desktop App
+### Optional / feature-scoped
 
-```bash
-cd apps/electron
+- `TAVILY_API_KEY` (web search augmentation)
+- `STRIPE_SECRET_KEY` (checkout/webhook)
+- `STRIPE_PRO_PRICE_ID` (checkout)
+- `STRIPE_WEBHOOK_SECRET` (webhook validation)
+- `NEXT_PUBLIC_APP_URL` (auth + Stripe redirect base URL)
+- `NODE_ENV`
 
-# Build for current platform
-pnpm run make
+### Electron (`apps/electron`)
 
-# Package without creating installer
-pnpm run package
-```
+- `NAVI_API_URL` (used by main process for opening auth/login URL; falls back to production API)
+- `NODE_ENV`
 
-Built artifacts will be in `apps/electron/out/`.
-
-### Release Process
-
-The project uses GitHub Actions for automated releases:
-
-1. Create and push a version tag:
-   ```bash
-   git tag v0.1.8
-   git push origin v0.1.8
-   ```
-
-2. The workflow automatically builds for macOS, Windows, and Linux
-
-3. Release drafts are created on GitHub Releases for review
+> Note: renderer API base URL is currently hardcoded in `apps/electron/src/renderer/config.ts` to `https://navi-search.vercel.app`.
 
 ---
 
-## 🌐 API Endpoints
+## API routes (current)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/chat` | POST | Stream chat completions |
-| `/api/auth/login` | GET | Initiate WorkOS authentication |
-| `/api/auth/callback` | GET | Handle OAuth callback |
-| `/api/user` | GET | Get current user info |
-| `/api/conversations` | GET/POST | Manage conversations |
-| `/api/messages` | GET/POST | Manage messages |
-| `/api/subscription/*` | Various | Stripe subscription management |
-| `/api/health` | GET | Health check endpoint |
-
----
-
-## 🔒 Security
-
-- **Context Isolation**: Electron's context isolation is enabled for security
-- **No Node Integration**: Renderer processes don't have direct Node.js access
-- **Secure Token Storage**: Auth tokens stored securely in the renderer
-- **HTTPS Only**: All API communications use HTTPS in production
-- **Rate Limiting**: Built-in rate limiting via Upstash Redis
-
----
-
-## 📝 Free Tier Limits
-
-- **20 messages per day** for free tier users
-- Limits reset at midnight UTC
-- Pro plan (coming soon) for unlimited usage
+- `GET /api/health`
+- `POST /api/chat`
+- `GET /api/user`
+- `GET /api/conversations`
+- `POST /api/conversations`
+- `DELETE /api/conversations?id=...`
+- `GET /api/messages?conversationId=...`
+- `POST /api/messages`
+- `GET /api/auth/login`
+- `GET /api/auth/callback`
+- `POST /api/auth/refresh`
+- `GET /api/debug`
+- `POST /api/debug`
+- `GET /api/debug/message-count`
+- `POST /api/debug/message-count`
+- `GET /api/subscription/checkout`
+- `POST /api/subscription/checkout`
+- `GET /api/subscription/success`
+- `GET /api/subscription/canceled`
+- `POST /api/subscription/webhook`
 
 ---
 
-## 🤝 Contributing
+## Desktop behavior and shortcuts
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Global shortcuts:
+- Toggle Navi: `Cmd + \`` (macOS) / `Alt + \`` (Windows/Linux)
+- Open settings: `Cmd + .` / `Alt + .`
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+In-app shortcuts:
+- New chat: `Cmd/Alt + N`
+- Close overlay: `Esc` (when undocked)
 
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- [Groq](https://groq.com/) for ultra-fast LLM inference
-- [Electron](https://www.electronjs.org/) for cross-platform desktop apps
-- [WorkOS](https://workos.com/) for authentication
-- [Neon](https://neon.tech/) for serverless PostgreSQL
-- [Upstash](https://upstash.com/) for serverless Redis
-- [Tavily](https://tavily.com/) for web search
-- [Vercel](https://vercel.com/) for hosting
+Navi supports:
+- Tray-first app behavior
+- Overlay mode + docked mode
+- Cross-window settings sync via IPC
+- Deep-link auth callbacks through `navi://`
 
 ---
 
-<p align="center">
-  Made with ❤️ by <a href="https://github.com/Arkane-o7">Arkane-o7</a>
-</p>
+## Chat flow summary
+
+1. Renderer sends `message + history` to `/api/chat`.
+2. API validates input and identifies user (token if present, anonymous fallback otherwise).
+3. API checks subscription + free-tier daily limit in Redis (`20/day` for free).
+4. If message looks search-sensitive, API may fetch Tavily context.
+5. API streams Gemini output back as SSE chunks.
+6. If Gemini returns a rate-limit/quota error, API falls back to Groq for that request.
+
+---
+
+## Data model (initialized by API)
+
+Tables created in `apps/api/src/lib/db.ts`:
+- `users`
+- `conversations`
+- `messages`
+- `subscriptions`
+
+Redis usage includes daily counters and rate-limit keys.
+
+---
+
+## Build and release
+
+### Electron
+
+Build installers/packages from `apps/electron` using Electron Forge makers:
+- Squirrel (Windows)
+- DMG + ZIP (macOS)
+- ZIP (Linux)
+
+Release workflow (`.github/workflows/release.yml`) builds per OS on `v*` tags and publishes artifacts.
+
+### API
+
+`apps/api/vercel.json` is configured for Vercel deployment.
+
+---
+
+## Security notes
+
+- `contextIsolation: true`
+- `nodeIntegration: false`
+- Renderer ↔ main communication goes through preload IPC bridge
+
+---
+
+## Current caveats to know
+
+- Some legacy docs may mention routes/files no longer in code (e.g., `subscription/portal`, `middleware.ts`). Prefer source under `apps/**` for truth.
+
+---
+
+## Repo docs
+
+- `docs/ARCHITECTURE.md`
+- `docs/DEVELOPMENT.md`
+- `docs/API.md`
+- `docs/DEPLOYMENT.md`
+
+(These are helpful context, but code is the source of truth.)
+
+---
+
+## License
+
+MIT — see `LICENSE`.

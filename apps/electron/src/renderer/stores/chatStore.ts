@@ -255,39 +255,30 @@ export const useChatStore = create<ChatState>()(
         try {
           const headers = getAuthHeaders();
 
-          // Fetch conversations list
-          const convRes = await fetch(`${API_CONFIG.baseUrl}/api/conversations`, { headers });
+          // Fetch conversations with embedded messages in one call
+          const convRes = await fetch(`${API_CONFIG.baseUrl}/api/conversations?includeMessages=true`, { headers });
           if (!convRes.ok) throw new Error('Failed to fetch conversations');
 
           const convData = await convRes.json();
           const cloudConversations = convData.data || [];
 
-          // Fetch messages for each conversation
-          const fullConversations: Conversation[] = [];
-          for (const conv of cloudConversations) {
-            const msgRes = await fetch(
-              `${API_CONFIG.baseUrl}/api/messages?conversationId=${conv.id}`,
-              { headers }
-            );
-
-            let messages: Message[] = [];
-            if (msgRes.ok) {
-              const msgData = await msgRes.json();
-              messages = (msgData.data?.messages || []).map((m: Message) => ({
-                ...m,
-                synced: true,
-              }));
-            }
-
-            fullConversations.push({
-              id: conv.id,
-              title: conv.title,
-              messages,
-              createdAt: new Date(conv.createdAt).getTime(),
-              updatedAt: new Date(conv.updatedAt).getTime(),
+          const fullConversations: Conversation[] = cloudConversations.map((conv: {
+            id: string;
+            title?: string;
+            createdAt: string;
+            updatedAt: string;
+            messages?: Message[];
+          }) => ({
+            id: conv.id,
+            title: conv.title,
+            messages: (conv.messages || []).map((m: Message) => ({
+              ...m,
               synced: true,
-            });
-          }
+            })),
+            createdAt: new Date(conv.createdAt).getTime(),
+            updatedAt: new Date(conv.updatedAt).getTime(),
+            synced: true,
+          }));
 
           // Merge with local conversations (local takes precedence for unsynced)
           const { conversations: localConversations } = get();

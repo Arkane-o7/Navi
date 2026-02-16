@@ -76,10 +76,10 @@ export async function initializeDatabase() {
 // Helper functions for subscriptions
 export async function getSubscription(userId: string) {
   const result = await sql`
-    SELECT tier, status, period_end
+    SELECT tier, status, current_period_end
     FROM subscriptions
     WHERE user_id = ${userId}
-  ` as Array<{ tier: string; status: string; period_end: string | null }>;
+  ` as Array<{ tier: string; status: string; current_period_end: string | null }>;
 
   if (result.length === 0) {
     // Return default free tier for users without subscription record
@@ -89,7 +89,7 @@ export async function getSubscription(userId: string) {
   return {
     tier: result[0].tier as 'free' | 'pro',
     status: result[0].status as 'active' | 'canceled' | 'past_due' | 'trialing',
-    periodEnd: result[0].period_end,
+    periodEnd: result[0].current_period_end,
   };
 }
 
@@ -123,4 +123,108 @@ export async function upsertSubscription(data: {
       current_period_end = EXCLUDED.current_period_end,
       updated_at = CURRENT_TIMESTAMP
   `;
+}
+
+export interface UserPreferences {
+  theme: 'system' | 'dark' | 'light';
+  dockBehavior: 'right' | 'left';
+  model: string;
+  historyWindowSize: number;
+}
+
+let ensureUserPreferencesTablePromise: Promise<void> | null = null;
+
+const DEFAULT_PREFERENCES: UserPreferences = {
+  theme: 'dark',
+  dockBehavior: 'right',
+  model: 'llama-3.3-70b-versatile',
+  historyWindowSize: 20,
+};
+
+export async function ensureUserPreferencesTable(): Promise<void> {
+  if (!ensureUserPreferencesTablePromise) {
+    ensureUserPreferencesTablePromise = sql`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        theme TEXT NOT NULL DEFAULT 'dark' CHECK (theme IN ('system', 'dark', 'light')),
+        dock_behavior TEXT NOT NULL DEFAULT 'right' CHECK (dock_behavior IN ('left', 'right')),
+        model TEXT NOT NULL DEFAULT 'llama-3.3-70b-versatile',
+        history_window_size INTEGER NOT NULL DEFAULT 20,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `.then(() => undefined).catch((error) => {
+      ensureUserPreferencesTablePromise = null;
+      throw error;
+    });
+  }
+
+  await ensureUserPreferencesTablePromise;
+}
+
+export async function getUserPreferences(userId: string): Promise<UserPreferences> {
+  await ensureUserPreferencesTable();
+
+  const rows = await sql`
+    SELECT theme, dock_behavior, model, history_window_size
+    FROM user_preferences
+    WHERE user_id = ${userId}
+    LIMIT 1
+  ` as Array<{
+    theme: UserPreferences['theme'];
+    dock_behavior: UserPreferences['dockBehavior'];
+    model: string;
+    history_window_size: number;
+  }>;
+
+  if (rows.length === 0) {
+    return DEFAULT_PREFERENCES;
+  }
+
+  return {
+    theme: rows[0].theme,
+    dockBehavior: rows[0].dock_behavior,
+    model: rows[0].model,
+    historyWindowSize: rows[0].history_window_size,
+  };
+}
+
+export async function upsertUserPreferences(
+  userId: string,
+  patch: Partial<UserPreferences>
+): Promise<UserPreferences> {
+  await ensureUserPreferencesTable();
+
+  const current = await getUserPreferences(userId);
+  const next: UserPreferences = {
+    ...current,
+    ...patch,
+  };
+
+  await sql`
+    INSERT INTO user_preferences (
+      user_id,
+      theme,
+      dock_behavior,
+      model,
+      history_window_size,
+      updated_at
+    )
+    VALUES (
+      ${userId},
+      ${next.theme},
+      ${next.dockBehavior},
+      ${next.model},
+      ${next.historyWindowSize},
+      CURRENT_TIMESTAMP
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+      theme = EXCLUDED.theme,
+      dock_behavior = EXCLUDED.dock_behavior,
+      model = EXCLUDED.model,
+      history_window_size = EXCLUDED.history_window_size,
+      updated_at = CURRENT_TIMESTAMP
+  `;
+
+  return next;
 }

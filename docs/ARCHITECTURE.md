@@ -1,438 +1,150 @@
-# Navi Architecture Documentation
+# Navi Architecture
 
-This document provides a detailed overview of Navi's architecture, design decisions, and how the different components interact.
+This is the current architecture of Navi based on the implementation under `apps/api` and `apps/electron`.
 
-## Table of Contents
+## High-level layout
 
-- [Overview](#overview)
-- [Monorepo Structure](#monorepo-structure)
-- [Electron App](#electron-app)
-- [API Server](#api-server)
-- [Data Flow](#data-flow)
-- [Authentication Flow](#authentication-flow)
-- [State Management](#state-management)
-- [Deployment Architecture](#deployment-architecture)
+Navi uses a monorepo with Turborepo + pnpm workspaces:
 
----
+- `apps/electron` — desktop app
+- `apps/api` — backend/API service
+- `packages/shared` — shared package namespace
 
-## Overview
+## Runtime components
 
-Navi is designed as a lightweight, always-available AI assistant that lives in your system tray. The architecture emphasizes:
+### Electron desktop app
 
-- **Low latency**: Streaming responses for instant feedback
-- **Cross-platform**: Single codebase for macOS, Windows, and Linux
-- **Offline-first**: Works without authentication (with rate limits)
-- **Privacy-conscious**: Minimal data collection, user control over data
+Process model:
 
-### High-Level Architecture
+- **Main process** (`apps/electron/src/main/index.ts`)
+  - tray app lifecycle
+  - global shortcuts
+  - flow window + settings window
+  - dock/undock orchestration
+  - deep-link handling (`navi://`)
+  - auto-update bootstrap (`update-electron-app`)
+- **Preload bridge** (`apps/electron/src/preload/index.ts`)
+  - typed IPC surface exposed as `window.navi`
+- **Renderer(s)** (`apps/electron/src/renderer/**`)
+  - React UI for chat and settings
+  - Zustand state stores
+  - markdown rendering for assistant responses
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Desktop App                               │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │ Main Process│  │  Preload    │  │    Renderer Process      │  │
-│  │  (Node.js)  │◄─┤  (Bridge)   │◄─┤   (React + Zustand)      │  │
-│  │  - Tray     │  │             │  │   - Chat UI              │  │
-│  │  - Shortcuts│  │  IPC        │  │   - Settings             │  │
-│  │  - Updates  │  │  Handlers   │  │   - Auth State           │  │
-│  └──────┬──────┘  └─────────────┘  └───────────┬─────────────┘  │
-│         │                                       │                 │
-└─────────┼───────────────────────────────────────┼─────────────────┘
-          │                                       │
-          │ Deep Links (navi://)                  │ HTTPS
-          │                                       ▼
-          │                          ┌─────────────────────────┐
-          │                          │    API Server (Vercel)   │
-          │                          │      Next.js 16          │
-          │                          │   ┌─────────────────┐   │
-          │                          │   │   /api/chat     │◄──┼─── Groq API
-          │                          │   │   /api/auth     │◄──┼─── WorkOS
-          │                          │   │   /api/user     │   │
-          │                          │   │   /api/messages │   │
-          │                          │   └────────┬────────┘   │
-          │                          │            │            │
-          │                          └────────────┼────────────┘
-          │                                       │
-          ▼                          ┌────────────┼────────────┐
-     ┌─────────┐                     │            │            │
-     │ WorkOS  │                     ▼            ▼            ▼
-     │ AuthKit │              ┌──────────┐ ┌──────────┐ ┌───────────┐
-     └─────────┘              │  Neon    │ │ Upstash  │ │  Tavily   │
-                              │ Postgres │ │  Redis   │ │  Search   │
-                              └──────────┘ └──────────┘ └───────────┘
-```
+### API service (Next.js)
+
+- Next.js App Router API routes under `apps/api/src/app/api/**`
+- Runs locally on `http://localhost:3001`
+- Deployed with Vercel config in `apps/api/vercel.json`
 
 ---
 
-## Monorepo Structure
+## Key data flows
 
-Navi uses **Turborepo** for monorepo management with **pnpm workspaces**.
+### 1) Auth flow (WorkOS + deep links)
 
-### Why Turborepo?
+1. Renderer invokes `window.navi.login()`
+2. Main process opens browser to `${NAVI_API_URL || https://navi-search.vercel.app}/api/auth/login`
+3. API redirects to WorkOS AuthKit
+4. Callback arrives at `/api/auth/callback`
+5. API exchanges code for tokens, upserts user, redirects to `navi://auth/callback?...`
+6. Main process receives deep link and broadcasts `auth:callback` IPC event
+7. Renderer persists tokens (`navi-auth`) and calls `/api/user`
 
-- **Incremental builds**: Only rebuilds what changed
-- **Parallel execution**: Runs tasks across packages simultaneously
-- **Remote caching**: Shares build artifacts across machines
-- **Simplified scripts**: Single commands to operate on all packages
+### 2) Chat flow
 
-### Package Dependencies
+1. Renderer sends `POST /api/chat` with `{ message, history }`
+2. API optionally derives user from bearer token
+3. API checks subscription + daily limit (Redis)
+4. API optionally augments prompt via Tavily search
+5. API streams Groq tokens as SSE chunks
+6. Renderer appends stream progressively and syncs usage/user state
 
-```
-@navi/electron ─────► @navi/shared
-                         ▲
-@navi/api ───────────────┘
-```
+### 3) Cloud sync flow
 
-### Workspace Configuration
+Renderer local state is source-of-truth first (`navi-chat-storage`).
+When authenticated, it syncs:
 
-```yaml
-# pnpm-workspace.yaml
-packages:
-  - 'apps/*'
-  - 'packages/*'
-```
+- conversation shell via `POST /api/conversations`
+- messages via `POST /api/messages`
+- reads via `GET /api/conversations` + `GET /api/messages`
 
----
-
-## Electron App
-
-### Process Architecture
-
-Electron apps have two types of processes:
-
-#### Main Process (`apps/electron/src/main/index.ts`)
-
-The main process runs in Node.js and handles:
-
-- **Window Management**: Creates and manages the overlay and settings windows
-- **Global Shortcuts**: Registers `Cmd+\`` / `Alt+\`` for toggling the panel
-- **System Tray**: Creates the menu bar/system tray icon
-- **Deep Links**: Handles `navi://` protocol for OAuth callbacks
-- **Auto-Updates**: Checks for and installs updates via `electron-updater`
-- **IPC Communication**: Bridges between main and renderer processes
-
-```typescript
-// Key features in main process
-- createFlowWindow()     // Transparent overlay window
-- createSettingsWindow() // Normal settings window
-- setupAutoUpdater()     // GitHub Releases integration
-- handleDeepLink()       // OAuth callback handling
-```
-
-#### Renderer Process (`apps/electron/src/renderer/`)
-
-The renderer runs in a Chromium context and handles the UI:
-
-- **React Application**: Modern React 18 with hooks
-- **State Management**: Zustand for lightweight state
-- **Styling**: CSS with CSS variables for theming
-- **Markdown Rendering**: `react-markdown` with syntax highlighting
-
-### Window Types
-
-1. **Flow Window** (Main Chat)
-   - Full-screen transparent overlay
-   - Click-through when not hovering on panel
-   - Always on top, frameless
-   - Draggable panel
-
-2. **Settings Window**
-   - Standard window with traffic lights (macOS)
-   - Theme settings, authentication, account info
-
-### IPC Communication
-
-```typescript
-// Preload API exposed to renderer
-window.navi = {
-  hide: () => void,
-  mouseEnter: () => void,
-  mouseLeave: () => void,
-  openExternal: (url: string) => void,
-  login: () => void,
-  logout: () => void,
-  onShow: (callback) => unsubscribe,
-  onAuthCallback: (callback) => unsubscribe,
-  onThemeChange: (callback) => unsubscribe,
-}
-```
+Merge strategy favors newer/unsynced local conversations.
 
 ---
 
-## API Server
+## Persistence layers
 
-### Tech Stack
+### Postgres (Neon)
 
-- **Next.js 16**: App Router with API routes
-- **Serverless**: Designed for Vercel edge functions
-- **Streaming**: SSE for real-time chat responses
+`initializeDatabase()` creates:
 
-### Route Structure
+- `users`
+- `conversations`
+- `messages`
+- `subscriptions`
 
-```
-apps/api/src/app/api/
-├── auth/
-│   ├── login/route.ts      # Initiate OAuth flow
-│   └── callback/route.ts   # Handle OAuth callback
-├── chat/route.ts           # Main chat endpoint (streaming)
-├── conversations/route.ts  # CRUD for conversations
-├── messages/route.ts       # CRUD for messages
-├── subscription/
-│   ├── route.ts           # Get subscription status
-│   ├── checkout/route.ts  # Create Stripe checkout
-│   ├── portal/route.ts    # Stripe customer portal
-│   └── webhook/route.ts   # Stripe webhooks
-├── user/route.ts          # Get/update user info
-├── health/route.ts        # Health check
-└── debug/route.ts         # Debug endpoints (dev only)
-```
+Indexes:
+- `idx_conversations_user_id`
+- `idx_messages_conversation_id`
+- `idx_subscriptions_stripe_customer`
 
-### Library Modules
+### Redis (Upstash)
 
-```
-apps/api/src/lib/
-├── auth.ts     # WorkOS client wrapper
-├── db.ts       # Neon PostgreSQL client
-├── groq.ts     # Groq API client (streaming)
-├── redis.ts    # Upstash Redis client
-└── tavily.ts   # Web search integration
-```
+Used for:
+- per-day free-tier usage counters: `daily_messages:<id>:<date>`
+- generic rate-limit helper keys: `rate_limit:<identifier>`
 
-### Chat Flow
+### Renderer persisted stores
 
-```
-User Message
-     │
-     ▼
-┌────────────────┐
-│ Check Auth     │ Optional (free tier allows anonymous)
-│ (JWT decode)   │
-└───────┬────────┘
-        ▼
-┌────────────────┐
-│ Check Rate     │ Daily limit for free tier (20/day)
-│ Limit (Redis)  │
-└───────┬────────┘
-        ▼
-┌────────────────┐
-│ Needs Search?  │ Pattern matching for news/facts
-│ (Tavily)       │
-└───────┬────────┘
-        ▼
-┌────────────────┐
-│ Stream LLM     │ Groq API with SSE
-│ Response       │
-└───────┬────────┘
-        ▼
-  SSE Stream to Client
-```
+- `navi-auth` (`authStore`)
+- `navi-chat-storage` (`chatStore`)
+- `navi-settings` (`settingsStore`)
 
 ---
 
-## Data Flow
+## Desktop UX architecture
 
-### Message Streaming
+### Windows
 
-```typescript
-// Client initiates request
-fetch('/api/chat', {
-  method: 'POST',
-  body: JSON.stringify({ message, history }),
-  headers: { 'Content-Type': 'application/json' }
-});
+- **Flow window**: transparent overlay chat surface
+- **Docked window**: solid pane mode
+- **Settings window**: separate fixed-size window (`settings.html`)
 
-// Server streams SSE
-for await (const chunk of streamChatCompletion(messages)) {
-  controller.enqueue(`data: ${JSON.stringify({ content: chunk })}\n\n`);
-}
-controller.enqueue('data: [DONE]\n\n');
-```
+### Global shortcuts
 
-### Data Persistence
+- Toggle flow: `Cmd+\`` (macOS) / `Alt+\`` (others)
+- Open settings: `Cmd+.` / `Alt+.`
 
-```
-┌─────────────────┐     ┌─────────────────┐
-│    Zustand      │     │  Local Storage  │
-│    (Memory)     │────►│   (Persist)     │
-└────────┬────────┘     └─────────────────┘
-         │
-         │ Sync (authenticated users)
-         ▼
-┌─────────────────┐
-│  Neon Postgres  │
-│  (Cloud Sync)   │
-└─────────────────┘
-```
+### Security posture
+
+Electron webPreferences use:
+- `contextIsolation: true`
+- `nodeIntegration: false`
+
+IPC is constrained to preload-defined methods.
 
 ---
 
-## Authentication Flow
+## Build + release architecture
 
-### WorkOS AuthKit Integration
+### API
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Electron  │     │   API       │     │   WorkOS    │
-│   App       │     │   Server    │     │   AuthKit   │
-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
-       │                   │                   │
-       │ 1. Click Login    │                   │
-       ├──────────────────►│                   │
-       │                   │                   │
-       │   2. Redirect     │                   │
-       │◄──────────────────┤                   │
-       │                   │                   │
-       │ 3. Open Browser   │                   │
-       ├───────────────────┼──────────────────►│
-       │                   │                   │
-       │                   │ 4. User Signs In  │
-       │                   │◄──────────────────┤
-       │                   │                   │
-       │ 5. Callback       │                   │
-       │   (navi://auth/callback)              │
-       │◄──────────────────┤                   │
-       │                   │                   │
-       │ 6. Store Tokens   │                   │
-       ├──────────────────►│                   │
-       │                   │                   │
-```
+- Next.js build via Turbo filter (`@navi/api`)
+- Vercel deployment configured in `apps/api/vercel.json`
 
-### Deep Link Protocol
+### Desktop
 
-```
-navi://auth/callback?access_token=...&refresh_token=...&user_id=...
-navi://auth/error?error=...&description=...
-```
-
-### Token Management
-
-- **Access Token**: Short-lived JWT for API requests
-- **Refresh Token**: Long-lived token for obtaining new access tokens
-- **Storage**: In-memory (Zustand) + persist middleware
+- Electron Forge makers: Squirrel, ZIP, DMG
+- GitHub publisher configured in `forge.config.js`
+- CI release workflow: `.github/workflows/release.yml`
+  - triggered by `v*` tags
+  - validates tag matches `apps/electron/package.json` version
+  - builds per-OS and publishes
 
 ---
 
-## State Management
+## Known implementation caveats
 
-### Zustand Stores
-
-```typescript
-// apps/electron/src/renderer/stores/
-
-// chatStore.ts - Conversation and message state
-interface ChatStore {
-  conversations: Map<string, Conversation>;
-  activeConversationId: string | null;
-  // ... methods
-}
-
-// authStore.ts - Authentication state
-interface AuthStore {
-  accessToken: string | null;
-  refreshToken: string | null;
-  user: User | null;
-  isAuthenticated: boolean;
-  // ... methods
-}
-
-// settingsStore.ts - User preferences
-interface SettingsStore {
-  theme: 'system' | 'dark' | 'light';
-  // ... methods
-}
-```
-
-### Cross-Window Sync
-
-Settings are synchronized between the main flow window and settings window via IPC:
-
-```typescript
-// Main process broadcasts theme changes
-ipcMain.on('settings:setTheme', (_e, theme) => {
-  flowWindow?.webContents.send('settings:themeChanged', theme);
-  settingsWindow?.webContents.send('settings:themeChanged', theme);
-});
-```
-
----
-
-## Deployment Architecture
-
-### Production Setup
-
-```
-                    ┌─────────────────────────────────┐
-                    │        GitHub Repository        │
-                    └────────────┬────────────────────┘
-                                 │
-           ┌─────────────────────┼─────────────────────┐
-           │                     │                     │
-           ▼                     ▼                     ▼
-    ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
-    │   Vercel    │       │   GitHub    │       │   GitHub    │
-    │   (API)     │       │  Releases   │       │  Actions    │
-    │             │       │  (Desktop)  │       │  (CI/CD)    │
-    └─────────────┘       └─────────────┘       └─────────────┘
-```
-
-### CI/CD Pipeline
-
-1. **Push tag** (`v*`) triggers GitHub Actions
-2. **Build matrix**: macOS, Windows, Linux
-3. **Electron Forge** creates installers
-4. **Publish** to GitHub Releases as draft
-5. **Auto-update** checks GitHub Releases
-
-### Infrastructure Costs (Typical)
-
-| Service | Free Tier | Paid |
-|---------|-----------|------|
-| Vercel | ✅ Hobby | ~$20/mo Pro |
-| Neon | ✅ 0.5 GB | ~$19/mo |
-| Upstash | ✅ 10K/day | ~$0.2/10K |
-| Groq | ✅ 14K RPD | Pay-as-go |
-| WorkOS | ✅ 1M MAU | Enterprise |
-| Tavily | ✅ 1K/mo | ~$100/mo |
-
----
-
-## Security Considerations
-
-### Electron Security
-
-- **Context Isolation**: Enabled by default
-- **Node Integration**: Disabled in renderer
-- **Preload Scripts**: Minimal API surface
-- **Web Security**: Enabled in production
-
-### API Security
-
-- **CORS**: Configured for allowed origins
-- **Rate Limiting**: Per-user and per-IP limits
-- **JWT Validation**: Token verification on protected routes
-- **Input Validation**: Zod schemas for request validation
-
-### Data Privacy
-
-- **Minimal Collection**: Only store what's necessary
-- **User Control**: Users can delete their data
-- **No Telemetry**: No analytics or tracking (by default)
-
----
-
-## Future Architecture Considerations
-
-### Planned Improvements
-
-1. **Local LLM Support**: Ollama integration for offline mode
-2. **Plugin System**: Extensible tool/function calling
-3. **Voice Input**: Speech-to-text integration
-4. **Screen Context**: Screenshot analysis for contextual help
-5. **Team Features**: Shared prompts and knowledge bases
-
-### Scalability
-
-- **Edge Functions**: Migrate to edge runtime for lower latency
-- **Connection Pooling**: Use connection pooler for database
-- **CDN**: Cache static assets at the edge
-- **Regional Deployment**: Multi-region for global users
+- Renderer API base URL is currently hardcoded in `apps/electron/src/renderer/config.ts` (`https://navi-search.vercel.app`).
+- Root scripts include website targets (`dev:website`, `build:website`) but no `apps/website` directory exists.
+- Subscription retrieval in `src/lib/db.ts` selects `period_end` while schema defines `current_period_end`.

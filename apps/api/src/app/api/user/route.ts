@@ -2,20 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sql, getSubscription } from '@/lib/db';
 import { getDailyMessageCount } from '@/lib/redis';
 import { logger } from '@/lib/logger';
-
-// Helper to get user ID from auth header
-function getUserIdFromHeader(request: NextRequest): string | null {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-    return payload.sub || null;
-  } catch {
-    return null;
-  }
-}
+import { getUserIdFromHeader } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const userId = getUserIdFromHeader(request);

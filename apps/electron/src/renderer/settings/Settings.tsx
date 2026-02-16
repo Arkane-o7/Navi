@@ -22,9 +22,21 @@ const THEMES = [
 export default function Settings() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string>('Loading...');
 
-  const { theme, dockBehavior, model, setTheme, setDockBehavior, setModel } = useSettingsStore();
-  const { user, subscription, isAuthenticated, setUser, setTokens, logout, syncUser } = useAuthStore();
+  const {
+    theme,
+    dockBehavior,
+    model,
+    historyWindowSize,
+    setTheme,
+    setDockBehavior,
+    setModel,
+    setHistoryWindowSize,
+    syncFromCloud,
+    syncToCloud,
+  } = useSettingsStore();
+  const { user, subscription, isAuthenticated, setTokens, logout, syncUser } = useAuthStore();
 
   // Apply theme to settings window
   useEffect(() => {
@@ -78,6 +90,12 @@ export default function Settings() {
     };
   }, [isAuthenticated, syncUser]);
 
+  // Pull preferences from cloud when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    syncFromCloud();
+  }, [isAuthenticated, syncFromCloud]);
+
   // Listen for auth events
   useEffect(() => {
     if (!window.navi) return;
@@ -106,7 +124,7 @@ export default function Settings() {
       unsubError();
       unsubLogout();
     };
-  }, [setTokens, setUser, logout]);
+  }, [setTokens, logout]);
 
   // Listen for dock behavior changes from other windows
   useEffect(() => {
@@ -127,6 +145,33 @@ export default function Settings() {
     if (!window.navi?.setDockBehavior) return;
     logger.debug('[Settings] Syncing dock behavior to main:', dockBehavior);
     window.navi.setDockBehavior(dockBehavior);
+  }, []);
+
+  // Load app version for About section
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!window.navi?.getAppVersion) {
+      setAppVersion('Unknown');
+      return;
+    }
+
+    window.navi.getAppVersion()
+      .then((version) => {
+        if (isMounted) {
+          setAppVersion(version || 'Unknown');
+        }
+      })
+      .catch((error) => {
+        logger.error('[Settings] Failed to load app version:', error);
+        if (isMounted) {
+          setAppVersion('Unknown');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleLogin = () => {
@@ -186,6 +231,7 @@ export default function Settings() {
           {activeTab === 'general' && (
             <div className="settings-panel">
               <h2>General</h2>
+              <p className="settings-panel-description">Manage your account, appearance, and app behavior.</p>
 
               {/* Account Section */}
               <section className="settings-section">
@@ -208,46 +254,34 @@ export default function Settings() {
                     </div>
 
                     {/* Subscription Status */}
-                    <div className="settings-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div className="settings-item settings-item-stack">
+                      <div className="settings-item-top">
                         <span className="settings-item-label">
                           {subscription.tier === 'pro' ? 'Pro Plan' : 'Free Plan'}
                         </span>
                         {subscription.tier === 'pro' ? (
-                          <span className="settings-badge" style={{ background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }}>Active</span>
+                          <span className="settings-badge settings-badge-active">Active</span>
                         ) : (
                           <span className="settings-badge">Pro Coming Soon</span>
                         )}
                       </div>
                       {subscription.tier === 'free' && (
                         <>
-                          <div className="progress-bar-container" style={{
-                            height: 6,
-                            background: 'rgba(255,255,255,0.1)',
-                            borderRadius: 3,
-                            overflow: 'hidden',
-                            marginBottom: 6
-                          }}>
+                          <div className="progress-bar-container">
                             <div
-                              className="progress-bar-fill"
+                              className={`progress-bar-fill ${subscription.dailyMessagesUsed >= subscription.dailyMessagesLimit ? 'limit-reached' : ''}`}
                               style={{
                                 width: `${Math.min(100, (subscription.dailyMessagesUsed / subscription.dailyMessagesLimit) * 100)}%`,
-                                height: '100%',
-                                background: subscription.dailyMessagesUsed >= subscription.dailyMessagesLimit
-                                  ? '#ef4444'
-                                  : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
-                                borderRadius: 3,
-                                transition: 'width 0.3s ease'
                               }}
                             />
                           </div>
-                          <span className="settings-item-description" style={{ margin: 0 }}>
+                          <span className="settings-item-description compact">
                             {subscription.dailyMessagesUsed} / {subscription.dailyMessagesLimit} messages used today
                           </span>
                         </>
                       )}
                       {subscription.tier === 'pro' && (
-                        <span className="settings-item-description" style={{ margin: 0 }}>Unlimited messages</span>
+                        <span className="settings-item-description compact">Unlimited messages</span>
                       )}
                     </div>
                   </>
@@ -283,6 +317,7 @@ export default function Settings() {
                       const newTheme = e.target.value as 'system' | 'dark' | 'light';
                       setTheme(newTheme);
                       window.navi?.setTheme(newTheme);
+                      syncToCloud({ theme: newTheme });
                     }}
                   >
                     {THEMES.map((t) => (
@@ -312,11 +347,23 @@ export default function Settings() {
                       setDockBehavior(behavior);
                       logger.debug('[Settings] Dock behavior changed (UI):', behavior);
                       window.navi?.setDockBehavior(behavior);
+                      syncToCloud({ dockBehavior: behavior });
                     }}
                   >
                     <option value="right">Dock right (default)</option>
                     <option value="left">Dock left</option>
                   </select>
+                </div>
+              </section>
+
+              {/* About Section */}
+              <section className="settings-section">
+                <h3>About</h3>
+                <div className="settings-item">
+                  <div className="settings-item-info">
+                    <span className="settings-item-label">Current version</span>
+                    <span className="settings-item-description">Navi v{appVersion}</span>
+                  </div>
                 </div>
               </section>
             </div>
@@ -325,6 +372,7 @@ export default function Settings() {
           {activeTab === 'cloud-sync' && (
             <div className="settings-panel">
               <h2>Cloud Sync</h2>
+              <p className="settings-panel-description">Keep your chats and preferences available across devices.</p>
 
               <section className="settings-section">
                 {isAuthenticated ? (
@@ -342,7 +390,7 @@ export default function Settings() {
                     </svg>
                     <h3>Sign In Required</h3>
                     <p>Sign in to enable cloud sync for your conversations and settings.</p>
-                    <button className="settings-button primary" style={{ marginTop: 16 }} onClick={handleLogin}>
+                    <button className="settings-button primary settings-button-spaced" onClick={handleLogin}>
                       Sign In
                     </button>
                   </div>
@@ -354,6 +402,7 @@ export default function Settings() {
           {activeTab === 'advanced' && (
             <div className="settings-panel">
               <h2>Advanced</h2>
+              <p className="settings-panel-description">Tune model and memory settings for your workflow.</p>
 
               {/* Model Selection */}
               <section className="settings-section">
@@ -368,7 +417,11 @@ export default function Settings() {
                   <select
                     className="settings-select"
                     value={model}
-                    onChange={(e) => setModel(e.target.value)}
+                    onChange={(e) => {
+                      const nextModel = e.target.value;
+                      setModel(nextModel);
+                      syncToCloud({ model: nextModel });
+                    }}
                   >
                     {GROQ_MODELS.map((m) => (
                       <option key={m.id} value={m.id}>
@@ -389,7 +442,15 @@ export default function Settings() {
                       Number of recent messages to include for context (older messages are summarized)
                     </span>
                   </div>
-                  <select className="settings-select" defaultValue="20">
+                  <select
+                    className="settings-select"
+                    value={String(historyWindowSize)}
+                    onChange={(e) => {
+                      const size = Number(e.target.value);
+                      setHistoryWindowSize(size);
+                      syncToCloud({ historyWindowSize: size });
+                    }}
+                  >
                     <option value="10">10 messages</option>
                     <option value="20">20 messages (Recommended)</option>
                     <option value="30">30 messages</option>

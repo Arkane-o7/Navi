@@ -20,6 +20,19 @@ export interface TavilySearchResponse {
   answer?: string;
 }
 
+interface TavilyApiResult {
+  title: string;
+  url: string;
+  content: string;
+  score: number;
+}
+
+interface TavilyApiResponse {
+  query: string;
+  results?: TavilyApiResult[];
+  answer?: string;
+}
+
 function getApiKey(): string {
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) {
@@ -86,11 +99,11 @@ export async function searchWeb(
       throw new Error(`Tavily API error: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as TavilyApiResponse;
     
     return {
       query: data.query,
-      results: data.results?.map((r: any) => ({
+      results: data.results?.map((r) => ({
         title: r.title,
         url: r.url,
         content: r.content,

@@ -7,9 +7,22 @@ export default defineConfig({
   root: path.resolve(__dirname),
   resolve: {
     dedupe: ['react', 'react-dom', 'zustand'],
+    alias: {
+      react: path.resolve(__dirname, 'node_modules/react'),
+      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+      'react-dom/client': path.resolve(__dirname, 'node_modules/react-dom/client'),
+    },
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'zustand', 'zustand/middleware'],
+    include: [
+      'react',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+      'react-dom',
+      'react-dom/client',
+      'zustand',
+      'zustand/middleware',
+    ],
   },
   build: {
     rollupOptions: {

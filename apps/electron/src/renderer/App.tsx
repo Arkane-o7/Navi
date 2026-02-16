@@ -41,6 +41,9 @@ export default function App() {
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: PANEL_TOP_OFFSET });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0, panelX: 0, panelY: 0 });
+  const panelPositionRef = useRef({ x: 0, y: PANEL_TOP_OFFSET });
+  const dragCurrentRef = useRef({ x: 0, y: PANEL_TOP_OFFSET });
+  const dragAnimationFrameRef = useRef<number | null>(null);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +69,7 @@ export default function App() {
   useEffect(() => {
     const { setTokens } = useAuthStore.getState();
     const { fetchFromCloud } = useChatStore.getState();
+    const { syncFromCloud } = useSettingsStore.getState();
 
     const initAuth = async () => {
       await refreshAuth();
@@ -73,6 +77,7 @@ export default function App() {
       // Fetch conversations from cloud if authenticated
       if (useAuthStore.getState().isAuthenticated) {
         fetchFromCloud();
+        syncFromCloud();
       }
     };
     initAuth();
@@ -85,6 +90,7 @@ export default function App() {
         await syncUser();
         // Fetch conversations after sign in
         fetchFromCloud();
+        syncFromCloud();
       });
 
       // Refresh every 5 minutes
@@ -179,6 +185,24 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────
   const DRAG_EDGE_SIZE = 12; // pixels from edge where dragging is allowed
 
+  const applyPanelTransform = useCallback((x: number, y: number) => {
+    if (isDocked || !panelRef.current) return;
+    panelRef.current.style.transform = `translate(${x}px, ${y}px)`;
+  }, [isDocked]);
+
+  useEffect(() => {
+    panelPositionRef.current = panelPosition;
+    dragCurrentRef.current = panelPosition;
+
+    if (!isDocked && !isDragging) {
+      applyPanelTransform(panelPosition.x, panelPosition.y);
+    }
+
+    if (isDocked && panelRef.current) {
+      panelRef.current.style.transform = 'none';
+    }
+  }, [panelPosition, isDocked, isDragging, applyPanelTransform]);
+
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     if (isDocked) return;
 
@@ -210,30 +234,66 @@ export default function App() {
 
     e.preventDefault();
     setIsDragging(true);
+    panelPositionRef.current = panelPosition;
     dragStartRef.current = {
       x: e.clientX,
       y: e.clientY,
-      panelX: panelPosition.x,
-      panelY: panelPosition.y,
+      panelX: panelPositionRef.current.x,
+      panelY: panelPositionRef.current.y,
     };
+    dragCurrentRef.current = panelPositionRef.current;
   }, [panelPosition, isDocked]);
 
-  const handleDragMove = useCallback((e: React.MouseEvent) => {
+  const handleDragMove = useCallback((e: MouseEvent) => {
     if (isDocked) return;
     if (!isDragging) return;
 
     const deltaX = e.clientX - dragStartRef.current.x;
     const deltaY = e.clientY - dragStartRef.current.y;
 
-    setPanelPosition({
+    dragCurrentRef.current = {
       x: dragStartRef.current.panelX + deltaX,
       y: dragStartRef.current.panelY + deltaY,
+    };
+
+    if (dragAnimationFrameRef.current !== null) return;
+
+    dragAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      dragAnimationFrameRef.current = null;
+      applyPanelTransform(dragCurrentRef.current.x, dragCurrentRef.current.y);
     });
-  }, [isDragging, isDocked]);
+  }, [isDragging, isDocked, applyPanelTransform]);
 
   const handleDragEnd = useCallback(() => {
+    if (!isDragging) return;
+
+    if (dragAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragAnimationFrameRef.current);
+      dragAnimationFrameRef.current = null;
+    }
+
+    const finalPosition = dragCurrentRef.current;
+    panelPositionRef.current = finalPosition;
+    setPanelPosition(finalPosition);
     setIsDragging(false);
-  }, []);
+  }, [isDragging]);
+
+  useEffect(() => {
+    if (!isDragging || isDocked) return;
+
+    const onMove = (event: MouseEvent) => handleDragMove(event);
+    const onUp = () => handleDragEnd();
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('blur', onUp);
+
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('blur', onUp);
+    };
+  }, [isDragging, isDocked, handleDragMove, handleDragEnd]);
 
   const handleDockToggle = useCallback(() => {
     if (isDocked) {
@@ -384,9 +444,6 @@ export default function App() {
   return (
     <div
       className={`overlay-container ${isDocked ? 'docked' : ''}`}
-      onMouseMove={handleDragMove}
-      onMouseUp={handleDragEnd}
-      onMouseLeave={handleDragEnd}
     >
       {/* The actual command palette panel */}
       <div
@@ -399,7 +456,6 @@ export default function App() {
           width: isDocked ? '100%' : PANEL_WIDTH,
           maxHeight: isDocked ? '100%' : PANEL_MAX_HEIGHT,
           height: isDocked ? '100%' : undefined,
-          transform: isDocked ? 'none' : `translate(${panelPosition.x}px, ${panelPosition.y}px)`,
           cursor: !isDocked && isDragging ? 'grabbing' : undefined,
         }}
       >

@@ -5,6 +5,34 @@ import { consumeDailyMessageSlot, rollbackDailyMessageSlot } from '@/lib/redis';
 import { needsSearch, searchWeb, formatSearchContext } from '@/lib/tavily';
 import { logger } from '@/lib/logger';
 import { getUserIdFromHeader } from '@/lib/auth';
+import {
+    buildMemoryContextForPrompt,
+    extractMemoryCandidatesFromUserMessage,
+    forgetUserMemoriesByQuery,
+    parseMemoryCommand,
+    rememberUserMemory,
+    upsertUserMemoryCandidates,
+} from '@/lib/memory';
+
+function createImmediateSseResponse(content: string, requestId: string): NextResponse {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+        start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+        },
+    });
+
+    return new NextResponse(stream, {
+        headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Navi-Request-Id': requestId,
+        },
+    });
+}
 
 export async function POST(request: NextRequest) {
     const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
@@ -15,7 +43,11 @@ export async function POST(request: NextRequest) {
     let consumedFreeTierSlot = false;
 
     try {
-        let body: { message?: string; history?: Array<{ role: string; content: string }> };
+        let body: {
+            message?: string;
+            history?: Array<{ role: string; content: string }>;
+            conversationId?: string;
+        };
         try {
             body = await request.json();
         } catch {
@@ -24,7 +56,7 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
-        const { message, history = [] } = body;
+        const { message, history = [], conversationId } = body;
 
         if (!message) {
             return NextResponse.json(
@@ -35,6 +67,46 @@ export async function POST(request: NextRequest) {
 
         // Check if user is authenticated (optional for now - free tier allows anonymous)
         const userId = getUserIdFromHeader(request);
+
+        const memoryCommand = parseMemoryCommand(message);
+        if (memoryCommand) {
+            if (!userId) {
+                return createImmediateSseResponse(
+                    'Please sign in first so I can manage long-term memory for your account.',
+                    requestId
+                );
+            }
+
+            try {
+                if (memoryCommand.action === 'remember') {
+                    await rememberUserMemory({
+                        userId,
+                        conversationId,
+                        content: memoryCommand.content,
+                    });
+
+                    return createImmediateSseResponse(
+                        `Got it — I’ll remember: "${memoryCommand.content}"`,
+                        requestId
+                    );
+                }
+
+                const forgottenCount = await forgetUserMemoriesByQuery({
+                    userId,
+                    query: memoryCommand.query,
+                });
+
+                return createImmediateSseResponse(
+                    forgottenCount > 0
+                        ? `Done — I forgot ${forgottenCount} memory entr${forgottenCount === 1 ? 'y' : 'ies'} matching "${memoryCommand.query}".`
+                        : `I couldn't find any active memory matching "${memoryCommand.query}".`,
+                    requestId
+                );
+            } catch (error) {
+                logger.error(`[Chat][${requestId}] Memory command failed:`, error);
+                return createImmediateSseResponse('Sorry — I hit an error while managing memory. Please try again.', requestId);
+            }
+        }
 
         // For anonymous users, use IP-based rate limiting
         const identifier = userId || request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'anonymous';
@@ -76,6 +148,7 @@ export async function POST(request: NextRequest) {
             authenticated: Boolean(userId),
             tier: subscription.tier,
             historyCount: history.length,
+            hasConversationId: Boolean(conversationId),
         });
 
         // Check if message needs web search for real-time information
@@ -93,14 +166,36 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Retrieve relevant long-term memory for authenticated users.
+        let promptMessage = enhancedMessage;
+        if (userId) {
+            try {
+                const memoryContext = await buildMemoryContextForPrompt({
+                    userId,
+                    query: message,
+                    maxItems: 5,
+                });
+
+                if (memoryContext) {
+                    promptMessage = `${memoryContext}\n\nCurrent user message:\n${enhancedMessage}`;
+                }
+            } catch (error) {
+                logger.warn(`[Chat][${requestId}] Memory retrieval failed, continuing without memory context`, error);
+            }
+        }
+
         // Build messages array for Groq
         const messages: LlmChatMessage[] = [
             ...history.map((msg: { role: string; content: string }) => ({
                 role: msg.role as 'user' | 'assistant',
                 content: msg.content,
             })),
-            { role: 'user' as const, content: enhancedMessage },
+            { role: 'user' as const, content: promptMessage },
         ];
+
+        const memoryCandidates = userId
+            ? extractMemoryCandidatesFromUserMessage(message)
+            : [];
 
         // Create streaming response
         const encoder = new TextEncoder();
@@ -109,6 +204,7 @@ export async function POST(request: NextRequest) {
                 const streamStartedAt = Date.now();
                 let firstTokenAt: number | null = null;
                 let emittedChunks = 0;
+                let assistantFullResponse = '';
                 try {
                     for await (const chunk of streamChatCompletion(messages)) {
                         emittedChunks += 1;
@@ -116,9 +212,24 @@ export async function POST(request: NextRequest) {
                             firstTokenAt = Date.now();
                         }
 
+                        assistantFullResponse += chunk;
+
                         const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
                         controller.enqueue(encoder.encode(data));
                     }
+
+                    if (userId && memoryCandidates.length > 0) {
+                        try {
+                            await upsertUserMemoryCandidates({
+                                userId,
+                                conversationId,
+                                candidates: memoryCandidates,
+                            });
+                        } catch (error) {
+                            logger.warn(`[Chat][${requestId}] Memory write failed`, error);
+                        }
+                    }
+
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     controller.close();
 
@@ -127,6 +238,8 @@ export async function POST(request: NextRequest) {
                         totalDurationMs: Date.now() - requestStartedAt,
                         firstTokenMs: firstTokenAt ? firstTokenAt - streamStartedAt : null,
                         emittedChunks,
+                        assistantChars: assistantFullResponse.length,
+                        memoryCandidates: memoryCandidates.length,
                     });
                 } catch (error) {
                     logger.error(`[Chat][${requestId}] Stream error:`, error);

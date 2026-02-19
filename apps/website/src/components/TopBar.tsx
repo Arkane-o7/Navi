@@ -9,8 +9,10 @@ interface TopBarProps {
     sidebarOpen: boolean;
     accessToken: string | null;
     onToggleSidebar: () => void;
+    onNewChat: () => void;
     onModelChange: (model: string) => void;
     onLogin: () => void;
+    onOpenMemory: () => void;
 }
 
 export default function TopBar({
@@ -18,8 +20,10 @@ export default function TopBar({
     sidebarOpen,
     accessToken,
     onToggleSidebar,
+    onNewChat,
     onModelChange,
     onLogin,
+    onOpenMemory,
 }: TopBarProps) {
     return (
         <header className="topbar">
@@ -33,13 +37,14 @@ export default function TopBar({
                     </button>
                 )}
                 {!sidebarOpen && (
-                    <button className="topbar-new-chat" onClick={() => { }} title="New chat">
+                    <button className="topbar-new-chat" onClick={onNewChat} title="New chat">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 20h9" />
                             <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
                         </svg>
                     </button>
                 )}
+                <div className="topbar-brand">Navi</div>
                 <div className="model-selector">
                     <select
                         value={prefs.model}
@@ -58,22 +63,15 @@ export default function TopBar({
             </div>
 
             <div className="topbar-right">
+                {accessToken && (
+                    <button className="topbar-signup-btn" onClick={onOpenMemory}>
+                        Memory
+                    </button>
+                )}
                 {!accessToken && (
-                    <>
-                        <button className="topbar-login-btn" onClick={onLogin}>
-                            Log in
-                        </button>
-                        <button className="topbar-signup-btn" onClick={onLogin}>
-                            Sign up for free
-                        </button>
-                        <button className="topbar-help-btn" title="Help">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10" />
-                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                                <path d="M12 17h.01" />
-                            </svg>
-                        </button>
-                    </>
+                    <button className="topbar-login-btn" onClick={onLogin}>
+                        Log in
+                    </button>
                 )}
             </div>
         </header>

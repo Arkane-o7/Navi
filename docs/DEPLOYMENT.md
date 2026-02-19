@@ -63,8 +63,27 @@ Packager highlights:
 - `asar: true`
 - app bundle id: `com.navi.app`
 - deep-link protocol: `navi://`
-- ad-hoc macOS signing (`osxSign.identity = '-'`)
+- conditional macOS signing:
+	- production (when Apple secrets are present): Developer ID + notarization
+	- local/dev fallback: ad-hoc signing
 - GitHub publisher: `Arkane-o7/Navi`
+
+## macOS distribution for normal users (important)
+
+To avoid "Navi is damaged and can't be opened" for users who download from the website,
+the macOS release must be **Developer ID signed + notarized**.
+
+Configure these GitHub repo secrets for `release.yml`:
+
+- `APPLE_ID` (Apple account email)
+- `APPLE_APP_SPECIFIC_PASSWORD` (app-specific password)
+- `APPLE_TEAM_ID`
+- `APPLE_SIGN_IDENTITY` (optional override, e.g. `Developer ID Application: Your Name (TEAMID)`)
+
+Current Forge behavior in `apps/electron/forge.config.js`:
+
+- If the secrets exist: enable hardened runtime, sign with Developer ID, notarize with Apple.
+- If secrets are missing: fall back to ad-hoc signing (usable for local/dev, not ideal for public distribution).
 
 ## Release trigger
 

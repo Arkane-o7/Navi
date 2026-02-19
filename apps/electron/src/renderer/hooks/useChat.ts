@@ -18,13 +18,14 @@ export interface APIError {
 
 interface ChatStreamOptions {
   message: string;
+  conversationId?: string;
   history?: ChatMessage[]; // Previous messages for context
   onChunk: (content: string) => void;
   onDone: () => void;
   onError: (error: Error & { code?: string; upgradeUrl?: string }) => void;
 }
 
-export async function streamChat({ message, history = [], onChunk, onDone, onError }: ChatStreamOptions) {
+export async function streamChat({ message, conversationId, history = [], onChunk, onDone, onError }: ChatStreamOptions) {
   try {
     // Get auth token from store
     const authState = useAuthStore.getState();
@@ -41,7 +42,7 @@ export async function streamChat({ message, history = [], onChunk, onDone, onErr
     const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.chat}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, conversationId }),
     });
 
     if (!response.ok) {

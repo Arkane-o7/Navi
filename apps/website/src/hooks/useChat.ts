@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { apiFetch, API_BASE, authHeaders } from '@/lib/api';
+import { apiFetch, API_ENDPOINTS } from '@/lib/api';
 import type { Message, Preferences } from '@/lib/types';
 
 interface UseChatOptions {
@@ -34,7 +34,7 @@ export function useChat({
             while (pendingWritesRef.current.length > 0) {
                 const next = pendingWritesRef.current[0];
                 try {
-                    const res = await apiFetch('/api/messages', accessToken, {
+                    const res = await apiFetch(API_ENDPOINTS.messages, accessToken, {
                         method: 'POST',
                         body: JSON.stringify({
                             conversationId: next.conversationId,
@@ -111,10 +111,9 @@ export function useChat({
                     .slice(-prefs.historyWindowSize)
                     .map((m) => ({ role: m.role, content: m.content }));
 
-                const response = await fetch(`${API_BASE}/api/chat`, {
+                const response = await apiFetch(API_ENDPOINTS.chat, accessToken, {
                     method: 'POST',
-                    headers: authHeaders(accessToken) as Record<string, string>,
-                    body: JSON.stringify({ message: trimmed, history }),
+                    body: JSON.stringify({ message: trimmed, history, conversationId }),
                     signal: abortRef.current.signal,
                 });
 

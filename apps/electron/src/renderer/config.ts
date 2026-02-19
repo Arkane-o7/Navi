@@ -12,6 +12,7 @@ export const API_CONFIG = {
     health: '/api/health',
     user: '/api/user',
     conversations: '/api/conversations',
+    memory: '/api/memory',
   },
 };
 

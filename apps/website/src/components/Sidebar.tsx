@@ -16,6 +16,7 @@ interface SidebarProps {
     onDeleteConversation: (id: string) => void;
     onLogin: () => void;
     onLogout: () => void;
+    onOpenMemory: () => void;
 }
 
 export default function Sidebar({
@@ -31,6 +32,7 @@ export default function Sidebar({
     onDeleteConversation,
     onLogin,
     onLogout,
+    onOpenMemory,
 }: SidebarProps) {
     if (!isOpen) return null;
 
@@ -85,41 +87,13 @@ export default function Sidebar({
                     </svg>
                     <span>New chat</span>
                 </button>
-                <button className="sidebar-nav-item">
+                <button className="sidebar-nav-item" onClick={onOpenMemory}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.3-4.3" />
+                        <path d="M12 8v8" />
+                        <path d="M8 12h8" />
+                        <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0-18 0" />
                     </svg>
-                    <span>Search chats</span>
-                </button>
-                <button className="sidebar-nav-item">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                        <circle cx="9" cy="9" r="2" />
-                        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                    </svg>
-                    <span>Images</span>
-                </button>
-                <button className="sidebar-nav-item">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="2" y="2" width="8" height="8" rx="1" />
-                        <rect x="14" y="2" width="8" height="8" rx="1" />
-                        <rect x="2" y="14" width="8" height="8" rx="1" />
-                        <rect x="14" y="14" width="8" height="8" rx="1" />
-                    </svg>
-                    <span>Apps</span>
-                </button>
-                <button className="sidebar-nav-item">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                    </svg>
-                    <span>Deep research</span>
-                </button>
-                <button className="sidebar-nav-item">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-                    </svg>
-                    <span>Health</span>
+                    <span>Memory</span>
                 </button>
             </nav>
 

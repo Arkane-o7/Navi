@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { apiFetch, apiJson } from '@/lib/api';
+import { apiFetch, apiJson, API_ENDPOINTS } from '@/lib/api';
 import type { Conversation, Message } from '@/lib/types';
 
 function titleFromMessages(messages: Message[]) {
@@ -19,7 +19,7 @@ export function useConversations(accessToken: string | null) {
     const loadConversations = useCallback(
         async (token: string) => {
             const convPayload = await apiJson<{ data: Array<{ id: string; title?: string; createdAt: string; updatedAt: string; messages?: Message[] }> }>(
-                '/api/conversations?includeMessages=true',
+                API_ENDPOINTS.conversations.list,
                 token
             );
             if (!convPayload?.data) return;
@@ -58,7 +58,7 @@ export function useConversations(accessToken: string | null) {
         setActiveConversationId(id);
 
         if (accessToken) {
-            await apiFetch('/api/conversations', accessToken, {
+            await apiFetch(API_ENDPOINTS.conversations.create, accessToken, {
                 method: 'POST',
                 body: JSON.stringify({ id, title: localConv.title }),
             }).catch(() => undefined);
@@ -90,7 +90,7 @@ export function useConversations(accessToken: string | null) {
                 setActiveConversationId(null);
             }
             if (accessToken) {
-                await apiFetch(`/api/conversations?id=${conversationId}`, accessToken, {
+                await apiFetch(API_ENDPOINTS.conversations.delete(conversationId), accessToken, {
                     method: 'DELETE',
                 }).catch(() => undefined);
             }

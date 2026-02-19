@@ -400,6 +400,62 @@ body {
   max-width: 420px;
 }
 
+.settings-memory-wrap {
+  padding: 14px 16px 16px;
+}
+
+.settings-memory-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.settings-memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.settings-memory-empty {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 13px;
+}
+
+.settings-memory-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.settings-memory-item-content {
+  min-width: 0;
+}
+
+.settings-memory-item-content p {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.settings-memory-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
 @media (max-width: 900px) {
   .settings-sidebar {
     width: 196px;

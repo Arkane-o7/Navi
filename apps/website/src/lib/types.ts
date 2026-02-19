@@ -23,15 +23,27 @@ export interface Preferences {
     dockBehavior: 'left' | 'right';
 }
 
+export interface UserMemory {
+    id: string;
+    userId: string;
+    memoryType: 'preference' | 'profile_fact' | 'project_context' | 'task_state';
+    memoryKey: string;
+    content: string;
+    confidence: number;
+    sourceConversationId: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export const DEFAULT_PREFS: Preferences = {
     theme: 'dark',
-    model: 'llama-3.3-70b-versatile',
+    model: 'gemini-1.5-pro-latest',
     historyWindowSize: 20,
     dockBehavior: 'right',
 };
 
 export const MODEL_OPTIONS = [
-    { id: 'llama-3.3-70b-versatile', label: 'Navi' },
-    { id: 'llama-3.1-70b-versatile', label: 'Navi Fast' },
-    { id: 'llama-3.1-8b-instant', label: 'Navi Mini' },
+    { id: 'gemini-1.5-pro-latest', label: 'Navi Pro (Best quality)' },
+    { id: 'gemini-2.0-flash', label: 'Navi Balanced' },
+    { id: 'gemini-1.5-flash-latest', label: 'Navi Fast' },
 ];

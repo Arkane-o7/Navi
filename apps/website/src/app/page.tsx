@@ -4,13 +4,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useConversations } from '@/hooks/useConversations';
 import { useChat } from '@/hooks/useChat';
-import { apiJson } from '@/lib/api';
+import { apiFetch, apiJson, API_ENDPOINTS } from '@/lib/api';
 import { DEFAULT_PREFS } from '@/lib/types';
 import type { Preferences } from '@/lib/types';
 import Sidebar from '@/components/Sidebar';
 import TopBar from '@/components/TopBar';
 import EmptyState from '@/components/EmptyState';
 import ChatThread from '@/components/ChatThread';
+import MemoryPanel from '@/components/MemoryPanel';
+import type { UserMemory } from '@/lib/types';
 
 export default function HomePage() {
   const { accessToken, userEmail, userName, isInitialized, login, logout } = useAuth();
@@ -29,6 +31,10 @@ export default function HomePage() {
   const [input, setInput] = useState('');
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [memoryPanelOpen, setMemoryPanelOpen] = useState(false);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [memories, setMemories] = useState<UserMemory[]>([]);
 
   const { isLoading, streamError, sendMessage, stopGenerating } = useChat({
     accessToken,
@@ -44,7 +50,7 @@ export default function HomePage() {
     (async () => {
       const [prefPayload] = await Promise.all([
         apiJson<{ data: { preferences: Preferences } }>(
-          '/api/preferences',
+          API_ENDPOINTS.preferences,
           accessToken
         ),
         loadConversations(accessToken),
@@ -96,7 +102,55 @@ export default function HomePage() {
   const handleLogout = useCallback(() => {
     logout();
     setSidebarOpen(true);
+    setMemoryPanelOpen(false);
+    setMemories([]);
   }, [logout]);
+
+  const loadMemories = useCallback(async () => {
+    if (!accessToken) {
+      setMemoryError('Please log in to use memory controls.');
+      return;
+    }
+
+    setMemoryLoading(true);
+    setMemoryError(null);
+
+    try {
+      const payload = await apiJson<{ data: { memories: UserMemory[] } }>(
+        API_ENDPOINTS.memory.list(100),
+        accessToken
+      );
+
+      setMemories(payload?.data?.memories ?? []);
+    } catch {
+      setMemoryError('Failed to load memories.');
+    } finally {
+      setMemoryLoading(false);
+    }
+  }, [accessToken]);
+
+  const openMemoryPanel = useCallback(async () => {
+    setMemoryPanelOpen(true);
+    await loadMemories();
+  }, [loadMemories]);
+
+  const deleteMemory = useCallback(
+    async (id: string) => {
+      if (!accessToken) return;
+
+      const response = await apiFetch(API_ENDPOINTS.memory.delete(id), accessToken, {
+        method: 'DELETE',
+      }).catch(() => null);
+
+      if (!response?.ok) {
+        setMemoryError('Could not delete memory right now.');
+        return;
+      }
+
+      setMemories((current) => current.filter((memory) => memory.id !== id));
+    },
+    [accessToken]
+  );
 
   const hasMessages = !!activeConversation?.messages?.length;
 
@@ -115,6 +169,7 @@ export default function HomePage() {
         onDeleteConversation={deleteConversation}
         onLogin={login}
         onLogout={handleLogout}
+        onOpenMemory={openMemoryPanel}
       />
 
       <div className="main-panel">
@@ -123,8 +178,10 @@ export default function HomePage() {
           sidebarOpen={sidebarOpen}
           accessToken={accessToken}
           onToggleSidebar={() => setSidebarOpen(true)}
+          onNewChat={handleNewChat}
           onModelChange={handleModelChange}
           onLogin={login}
+          onOpenMemory={openMemoryPanel}
         />
 
         <div className="main-content">
@@ -152,6 +209,16 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      <MemoryPanel
+        isOpen={memoryPanelOpen}
+        isLoading={memoryLoading}
+        error={memoryError}
+        memories={memories}
+        onClose={() => setMemoryPanelOpen(false)}
+        onRefresh={loadMemories}
+        onDelete={deleteMemory}
+      />
     </div>
   );
 }

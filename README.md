@@ -187,6 +187,9 @@ Build installers/packages from `apps/electron` using Electron Forge makers:
 - DMG + ZIP (macOS)
 - ZIP (Linux)
 
+For public macOS releases, configure Apple signing/notarization secrets in GitHub Actions.
+Without notarization, users may see Gatekeeper warnings (for example, "app is damaged").
+
 Release workflow (`.github/workflows/release.yml`) builds per OS on `v*` tags and publishes artifacts.
 
 ### API

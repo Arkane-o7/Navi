@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { apiFetch, apiJson, loginUrl } from '@/lib/api';
+import { apiFetch, apiJson, API_ENDPOINTS, loginUrl } from '@/lib/api';
 import type { Preferences } from '@/lib/types';
 import { DEFAULT_PREFS } from '@/lib/types';
 
@@ -15,7 +15,7 @@ export function useAuth() {
         const currentRefresh = localStorage.getItem('navi-web-refresh-token');
         if (!currentRefresh) return null;
 
-        const res = await apiFetch('/api/auth/refresh', null, {
+        const res = await apiFetch(API_ENDPOINTS.auth.refresh, null, {
             method: 'POST',
             body: JSON.stringify({ refreshToken: currentRefresh }),
         });
@@ -31,7 +31,7 @@ export function useAuth() {
 
     const loadUserInfo = useCallback(async (token: string) => {
         const payload = await apiJson<{ data: { user: { email: string; firstName?: string; lastName?: string } } }>(
-            '/api/user',
+            API_ENDPOINTS.user,
             token
         );
         if (payload?.data?.user) {

@@ -393,6 +393,7 @@ export default function App() {
 
     await streamChat({
       message: userInput,
+      conversationId: convId,
       history: historyForApi,
       onChunk: (chunk) => {
         fullContent += chunk;

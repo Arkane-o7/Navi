@@ -1,3 +1,31 @@
+const hasNotarizationSecrets = Boolean(
+  process.env.APPLE_ID
+    && process.env.APPLE_APP_SPECIFIC_PASSWORD
+    && process.env.APPLE_TEAM_ID,
+);
+
+const macOsSignConfig = hasNotarizationSecrets
+  ? {
+      // Use Developer ID when release secrets are available.
+      identity: process.env.APPLE_SIGN_IDENTITY || 'Developer ID Application',
+      hardenedRuntime: true,
+      entitlements: './entitlements.mac.plist',
+      entitlementsInherit: './entitlements.mac.plist',
+      'gatekeeper-assess': false,
+    }
+  : {
+      // Local/dev fallback: ad-hoc signing.
+      identity: '-',
+    };
+
+const macOsNotarizeConfig = hasNotarizationSecrets
+  ? {
+      appleId: process.env.APPLE_ID,
+      appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
+      teamId: process.env.APPLE_TEAM_ID,
+    }
+  : undefined;
+
 module.exports = {
   packagerConfig: {
     name: 'Navi',
@@ -7,10 +35,10 @@ module.exports = {
     appBundleId: 'com.navi.app',
     appCategoryType: 'public.app-category.productivity',
     darwinDarkModeSupport: true,
-    // Ad-hoc signing for macOS (free, but users still need to right-click → Open)
-    osxSign: {
-      identity: '-',  // Ad-hoc signing (no Apple Developer account needed)
-    },
+    // Production: Developer ID signing + notarization (when secrets are present).
+    // Local/dev: ad-hoc signing fallback.
+    osxSign: macOsSignConfig,
+    osxNotarize: macOsNotarizeConfig,
     // Copy assets to resources folder for production tray icons
     extraResource: ['./assets'],
     // Register navi:// URL scheme for deep linking (OAuth callbacks)

@@ -30,7 +30,16 @@ jobs:
         with:
           version: 9
       - run: pnpm install
-      - run: cd apps/electron && pnpm run make
+      - name: Build default macOS artifacts (host arch)
+        run: cd apps/electron && pnpm run make
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+      - name: Build additional macOS x64 zip for updater compatibility
+        run: cd apps/electron && pnpm exec electron-forge make --platform=darwin --arch=x64 --targets=@electron-forge/maker-zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}

@@ -1,8 +1,27 @@
 # Navi
 
+<p align="center">
+  <img src="apps/electron/assets/logo-dark.png" alt="Navi logo" width="180">
+</p>
+
+![Electron](https://img.shields.io/badge/desktop-Electron-47848f?logo=electron&logoColor=white)
+![Next.js](https://img.shields.io/badge/API-Next.js%2016-black?logo=next.js)
+![Workspace](https://img.shields.io/badge/workspace-pnpm%20%2B%20Turborepo-f69220)
+
 Spotlight-style AI desktop assistant built with **Electron + React** and backed by a **Next.js API**.
 
 Navi runs as a tray app, opens instantly with a global shortcut, streams responses from Gemini, supports optional web search context, and syncs chats when authenticated.
+
+```mermaid
+flowchart LR
+    A[Global shortcut] --> B[Electron desktop app]
+    C[Web client] --> D[Next.js API]
+    B --> D
+    D --> E[Gemini]
+    D -. fallback .-> F[Groq]
+    D --> G[Postgres]
+    D --> H[Redis]
+```
 
 ---
 
